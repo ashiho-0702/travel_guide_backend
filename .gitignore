@@ -1,0 +1,25 @@
+# === Java / Maven ===
+target/
+*.class
+*.jar
+*.war
+*.ear
+
+# === IDE ===
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+*.swp
+
+# === OS ===
+.DS_Store
+Thumbs.db
+
+# === 本地配置（含真实密钥，勿提交；模板见 application.yml.example）===
+**/application.yml
+
+# === Claude Code 本地配置 ===
+.claude/

@@ -1,0 +1,49 @@
+spring:
+  application:
+    name: travel_guide
+  datasource:
+    url: "jdbc:mysql://localhost:3306/travel_guide?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true"
+    username: root
+    password: YOUR_MYSQL_PASSWORD
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+server:
+  port: 8080
+
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
+
+deepseek:
+  api-key: YOUR_DEEPSEEK_KEY
+  base-url: https://api.deepseek.com
+  model: deepseek-chat
+
+bocha:
+  api-key: YOUR_BOCHA_KEY
+  base-url: https://api.bocha.cn
+
+tencent:
+  map-key: YOUR_TENCENT_MAP_KEY
+
+wechat:
+  appid: YOUR_WECHAT_APPID
+  secret: YOUR_WECHAT_SECRET
+
+jwt:
+  secret: YOUR_JWT_SECRET_CHANGE_ME_AT_LEAST_32_CHARACTERS
+  expire-hours: 720
+
+vectorstore:
+  base-url: YOUR_ZILLIZ_CLUSTER_ENDPOINT
+  api-key: YOUR_ZILLIZ_API_KEY
+  collection: travel_guide
+
+embedding:
+  base-url: https://api.siliconflow.cn/v1
+  api-key: YOUR_SILICONFLOW_KEY
+  model: BAAI/bge-m3
+
+# 工作流开关（反思校验会增加一次 LLM 调用，可关闭省成本）
+workflow:
+  reflect: true

@@ -1,0 +1,79 @@
+package com.study.travel_guide.service;
+
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+import com.study.travel_guide.common.BizException;
+import com.study.travel_guide.common.JwtUtil;
+import com.study.travel_guide.entity.User;
+import com.study.travel_guide.mapper.UserMapper;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@Service
+public class AuthService {
+
+    private final RestClient restClient;
+    private final JsonMapper jsonMapper;
+    private final UserMapper userMapper;
+    private final JwtUtil jwtUtil;
+
+    @Value("${wechat.appid}")
+    private String appid;
+
+    @Value("${wechat.secret}")
+    private String secret;
+
+    public AuthService(RestClient restClient, JsonMapper jsonMapper, UserMapper userMapper, JwtUtil jwtUtil) {
+        this.restClient = restClient;
+        this.jsonMapper = jsonMapper;
+        this.userMapper = userMapper;
+        this.jwtUtil = jwtUtil;
+    }
+
+    public Map<String, Object> login(String code) {
+        String url = "https://api.weixin.qq.com/sns/jscode2session" +
+                "?appid={appid}&secret={secret}&js_code={code}&grant_type=authorization_code";
+
+        String json;
+        try {
+            json = restClient.get()
+                    .uri(url, appid, secret, code)
+                    .retrieve()
+                    .body(String.class);
+        } catch (RestClientResponseException e) {
+            throw new BizException(502, "微信接口调用失败(" + e.getStatusCode().value() + ")");
+        }
+
+        String openid;
+        try {
+            JsonNode root = jsonMapper.readTree(json);
+            openid = root.path("openid").asText();
+            if (openid == null || openid.isBlank()) {
+                throw new BizException(401, "微信登录失败: " + root.path("errmsg").asText());
+            }
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BizException(500, "微信响应解析失败: " + e.getMessage());
+        }
+
+        User user = userMapper.findByOpenid(openid);
+        if (user == null) {
+            user = new User();
+            user.setOpenid(openid);
+            userMapper.insert(user);
+        }
+
+        String token = jwtUtil.generate(user.getId(), openid);
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("token", token);
+        data.put("user", user);
+        return data;
+    }
+}
