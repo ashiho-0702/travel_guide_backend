@@ -14,12 +14,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Zilliz Cloud（托管 Milvus）REST API 封装。
- * Milvus REST v2 字段名以官方文档为准，若接入时报字段错误，对照
- * https://docs.zilliz.com/reference/restful 微调 create/insert/search 的 body。
+ * Zilliz Cloud（托管 Milvus）REST API 封装，支持多个 collection、按任意标量字段过滤。
  */
 @Slf4j
 @Service
@@ -34,17 +33,37 @@ public class VectorStoreService {
     @Value("${vectorstore.api-key}")
     private String apiKey;
 
-    @Value("${vectorstore.collection}")
-    private String collection;
-
-    private final AtomicBoolean collectionEnsured = new AtomicBoolean(false);
+    private final Map<String, AtomicBoolean> collectionEnsured = new ConcurrentHashMap<>();
 
     public VectorStoreService(RestClient restClient, JsonMapper jsonMapper) {
         this.restClient = restClient;
         this.jsonMapper = jsonMapper;
     }
 
-    public void ensureCollection(int dimension) {
+    public void ensureCollectionIfNeeded(String collection, int dimension) {
+        AtomicBoolean flag = collectionEnsured.computeIfAbsent(collection, k -> new AtomicBoolean(false));
+        if (flag.get()) {
+            return;
+        }
+        synchronized (flag) {
+            if (flag.get()) {
+                return;
+            }
+            try {
+                ensureCollection(collection, dimension);
+                flag.set(true);
+            } catch (BizException e) {
+                String msg = e.getMessage() == null ? "" : e.getMessage();
+                if (msg.contains("exist") || msg.contains("存在")) {
+                    flag.set(true);
+                } else {
+                    log.warn("create collection {} failed (will retry next call): {}", collection, msg);
+                }
+            }
+        }
+    }
+
+    private void ensureCollection(String collection, int dimension) {
         Map<String, Object> body = new HashMap<>();
         body.put("collectionName", collection);
         body.put("dimension", dimension);
@@ -55,35 +74,14 @@ public class VectorStoreService {
         post("/collections/create", body);
     }
 
-    public void ensureCollectionIfNeeded(int dimension) {
-        if (collectionEnsured.get()) {
-            return;
-        }
-        synchronized (this) {
-            if (collectionEnsured.get()) {
-                return;
-            }
-            try {
-                ensureCollection(dimension);
-                collectionEnsured.set(true);
-            } catch (BizException e) {
-                String msg = e.getMessage() == null ? "" : e.getMessage();
-                if (msg.contains("exist") || msg.contains("存在")) {
-                    collectionEnsured.set(true);
-                } else {
-                    log.warn("create collection failed (will retry next call): {}", msg);
-                }
-            }
-        }
-    }
-
-    public void upsert(List<float[]> vectors, List<String> texts, String city) {
+    public void upsert(String collection, List<float[]> vectors, List<String> texts,
+                       String filterField, String filterValue) {
         List<Map<String, Object>> rows = new ArrayList<>();
         for (int i = 0; i < vectors.size(); i++) {
             Map<String, Object> row = new HashMap<>();
             row.put("vector", vectors.get(i));
             row.put("text", texts.get(i));
-            row.put("city", city);
+            row.put(filterField, filterValue);
             rows.add(row);
         }
         Map<String, Object> body = new HashMap<>();
@@ -92,15 +90,16 @@ public class VectorStoreService {
         post("/entities/insert", body);
     }
 
-    public List<RetrievedDoc> search(float[] queryVector, int topK, String city) {
+    public List<RetrievedDoc> search(String collection, float[] queryVector, int topK,
+                                     String filterField, String filterValue) {
         Map<String, Object> body = new HashMap<>();
         body.put("collectionName", collection);
         body.put("data", List.of(queryVector));
         body.put("annsField", "vector");
         body.put("limit", topK);
         body.put("outputFields", List.of("text"));
-        if (city != null && !city.isBlank()) {
-            body.put("filter", "city == \"" + city + "\"");
+        if (filterField != null && filterValue != null && !filterValue.isBlank()) {
+            body.put("filter", filterField + " == \"" + filterValue + "\"");
         }
 
         JsonNode root = post("/entities/search", body);

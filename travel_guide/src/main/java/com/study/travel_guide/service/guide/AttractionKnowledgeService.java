@@ -1,39 +1,43 @@
-package com.study.travel_guide.service.rag;
+package com.study.travel_guide.service.guide;
 
-import org.springframework.beans.factory.annotation.Value;
+import com.study.travel_guide.service.rag.EmbeddingService;
+import com.study.travel_guide.service.rag.RetrievedDoc;
+import com.study.travel_guide.service.rag.VectorStoreService;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
 
 @Service
-public class IngestionService {
+public class AttractionKnowledgeService {
+
+    private static final String COLLECTION = "attraction_guide";
 
     private final EmbeddingService embeddingService;
     private final VectorStoreService vectorStore;
 
-    @Value("${vectorstore.collection}")
-    private String collection;
-
-    public IngestionService(EmbeddingService embeddingService, VectorStoreService vectorStore) {
+    public AttractionKnowledgeService(EmbeddingService embeddingService, VectorStoreService vectorStore) {
         this.embeddingService = embeddingService;
         this.vectorStore = vectorStore;
     }
 
-    public void ingest(String text, String city) {
-        ingestChunks(chunk(text, 500), city);
-    }
-
-    public void ingestChunks(List<String> chunks, String city) {
-        if (chunks == null || chunks.isEmpty()) {
+    public void ingest(String text, String attraction) {
+        List<String> chunks = chunk(text, 500);
+        if (chunks.isEmpty()) {
             return;
         }
         List<float[]> vectors = embeddingService.embedBatch(chunks);
-        vectorStore.ensureCollectionIfNeeded(collection, vectors.get(0).length);
-        vectorStore.upsert(collection, vectors, chunks, "city", city);
+        vectorStore.ensureCollectionIfNeeded(COLLECTION, vectors.get(0).length);
+        vectorStore.upsert(COLLECTION, vectors, chunks, "attraction", attraction);
     }
 
-    public List<String> chunk(String text, int maxChars) {
+    public List<RetrievedDoc> search(String query, String attraction, int topK) {
+        float[] qv = embeddingService.embed(query);
+        vectorStore.ensureCollectionIfNeeded(COLLECTION, qv.length);
+        return vectorStore.search(COLLECTION, qv, topK, "attraction", attraction);
+    }
+
+    private List<String> chunk(String text, int maxChars) {
         List<String> chunks = new ArrayList<>();
         if (text == null || text.isBlank()) {
             return chunks;

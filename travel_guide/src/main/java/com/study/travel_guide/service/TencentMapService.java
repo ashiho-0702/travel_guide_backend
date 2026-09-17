@@ -45,4 +45,36 @@ public class TencentMapService {
             return null;
         }
     }
+
+    /**
+     * 周边搜索，返回最近的 POI 名称（景点名），失败返回 null。
+     */
+    public String searchNearby(double lat, double lng) {
+        String url = "https://apis.map.qq.com/ws/place/v1/search" +
+                "?boundary=nearby({lat},{lng},1000)&key={key}";
+        try {
+            String json = restClient.get()
+                    .uri(url, lat, lng, mapKey)
+                    .retrieve()
+                    .body(String.class);
+            log.info("[map] 周边搜索响应（前 400 字符）：{}",
+                    json.length() > 400 ? json.substring(0, 400) : json);
+            JsonNode root = jsonMapper.readTree(json);
+            int status = root.path("status").asInt(-1);
+            if (status != 0) {
+                log.warn("[map] 周边搜索失败，status={}, message={}", status, root.path("message").asText());
+                return null;
+            }
+            JsonNode first = root.path("data").get(0);
+            if (first == null || first.isMissingNode()) {
+                log.warn("[map] 周边搜索无数据（该坐标 1 公里内无 POI）");
+                return null;
+            }
+            String name = first.path("title").asText();
+            return name == null || name.isBlank() ? null : name;
+        } catch (Exception e) {
+            log.warn("search nearby failed for {},{}: {}", lat, lng, e.getMessage());
+            return null;
+        }
+    }
 }

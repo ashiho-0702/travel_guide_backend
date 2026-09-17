@@ -23,3 +23,7 @@ Thumbs.db
 
 # === Claude Code 本地配置 ===
 .claude/
+
+# === TTS 解码测试产物 ===
+tts_base64.txt
+tts_output.mp3
