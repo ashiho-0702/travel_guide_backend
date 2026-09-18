@@ -31,3 +31,6 @@ input.mp3
 output.wav
 wav_base64.txt
 asr_body.json
+
+# === 上传的文件（用户头像等，不提交） ===
+upload/
