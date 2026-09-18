@@ -24,6 +24,10 @@ Thumbs.db
 # === Claude Code 本地配置 ===
 .claude/
 
-# === TTS 解码测试产物 ===
+# === 测试产物（音频/base64，不提交） ===
 tts_base64.txt
 tts_output.mp3
+input.mp3
+output.wav
+wav_base64.txt
+asr_body.json
