@@ -14,6 +14,7 @@ public class Trip {
     private Integer days;
     private String energyLevel;
     private String extra;
+    private String shareToken;
     private String status;
     private String result;
     private LocalDateTime createdAt;

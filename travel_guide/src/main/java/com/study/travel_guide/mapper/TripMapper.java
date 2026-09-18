@@ -8,6 +8,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Options;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
 
@@ -32,4 +33,13 @@ public interface TripMapper {
 
     @Delete("DELETE FROM trip WHERE id = #{id} AND user_id = #{userId}")
     int deleteByIdAndUser(@Param("id") Long id, @Param("userId") Long userId);
+
+    @Update("UPDATE trip SET share_token = #{token} WHERE id = #{id} AND user_id = #{userId}")
+    int updateShareToken(@Param("id") Long id, @Param("userId") Long userId, @Param("token") String token);
+
+    @Update("UPDATE trip SET share_token = NULL WHERE id = #{id} AND user_id = #{userId}")
+    int clearShareToken(@Param("id") Long id, @Param("userId") Long userId);
+
+    @Select("SELECT * FROM trip WHERE share_token = #{token}")
+    Trip findByShareToken(@Param("token") String token);
 }

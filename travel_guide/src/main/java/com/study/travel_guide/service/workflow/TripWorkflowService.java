@@ -5,7 +5,9 @@ import tools.jackson.databind.node.ObjectNode;
 import com.study.travel_guide.common.BizException;
 import com.study.travel_guide.dto.GenerateRequest;
 import com.study.travel_guide.entity.Trip;
+import com.study.travel_guide.entity.User;
 import com.study.travel_guide.mapper.TripMapper;
+import com.study.travel_guide.mapper.UserMapper;
 import com.study.travel_guide.service.DeepSeekService;
 import com.study.travel_guide.service.TencentMapService;
 import com.study.travel_guide.service.agent.AgentService;
@@ -13,6 +15,7 @@ import com.study.travel_guide.service.memory.UserMemoryService;
 import com.study.travel_guide.service.rag.IngestionService;
 import com.study.travel_guide.service.rag.RetrievalService;
 import com.study.travel_guide.service.rag.RetrievedDoc;
+import com.study.travel_guide.service.wechat.SubscribeMessageService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -83,6 +86,8 @@ public class TripWorkflowService {
     private final IngestionService ingestionService;
     private final UserMemoryService userMemoryService;
     private final TripMapper tripMapper;
+    private final UserMapper userMapper;
+    private final SubscribeMessageService subscribeMessageService;
     private final ExecutorService taskExecutor;
 
     @Value("${workflow.reflect:true}")
@@ -95,6 +100,8 @@ public class TripWorkflowService {
                                IngestionService ingestionService,
                                UserMemoryService userMemoryService,
                                TripMapper tripMapper,
+                               UserMapper userMapper,
+                               SubscribeMessageService subscribeMessageService,
                                ExecutorService taskExecutor) {
         this.retrievalService = retrievalService;
         this.agentService = agentService;
@@ -103,6 +110,8 @@ public class TripWorkflowService {
         this.ingestionService = ingestionService;
         this.userMemoryService = userMemoryService;
         this.tripMapper = tripMapper;
+        this.userMapper = userMapper;
+        this.subscribeMessageService = subscribeMessageService;
         this.taskExecutor = taskExecutor;
     }
 
@@ -131,10 +140,23 @@ public class TripWorkflowService {
         Trip trip = persist(userId, req, guide);
         ingestKnowledge(guide, req.getCity());
 
+        taskExecutor.execute(() -> sendSubscribeMessage(userId, req, trip));
+
         Map<String, Object> data = new HashMap<>();
         data.put("tripId", trip.getId());
         data.put("result", guide);
         return data;
+    }
+
+    private void sendSubscribeMessage(Long userId, GenerateRequest req, Trip trip) {
+        try {
+            User user = userMapper.findById(userId);
+            if (user != null && user.getOpenid() != null && !user.getOpenid().isBlank()) {
+                subscribeMessageService.sendGenerateDone(user.getOpenid(), req.getCity(), req.getDays(), trip.getId());
+            }
+        } catch (Exception e) {
+            log.warn("订阅消息发送失败: {}", e.getMessage());
+        }
     }
 
     public void generateStreaming(Long userId, GenerateRequest req, SseEmitter emitter) {

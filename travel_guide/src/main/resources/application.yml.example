@@ -33,6 +33,9 @@ tencent:
 wechat:
   appid: YOUR_WECHAT_APPID
   secret: YOUR_WECHAT_SECRET
+  subscribe-template-id: YOUR_TEMPLATE_ID
+  qrcode-page: pages/result/result
+  qrcode-env-version: develop
 
 jwt:
   secret: YOUR_JWT_SECRET_CHANGE_ME_AT_LEAST_32_CHARACTERS

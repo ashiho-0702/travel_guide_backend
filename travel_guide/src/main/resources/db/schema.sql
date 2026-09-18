@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS trip (
     days         INT          NOT NULL,
     energy_level VARCHAR(16),
     extra        VARCHAR(255),
+    share_token  VARCHAR(64),
     status       VARCHAR(16)  DEFAULT 'done',
     result       JSON,
     created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
