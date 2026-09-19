@@ -15,8 +15,8 @@ import java.util.List;
 @Mapper
 public interface TripMapper {
 
-    @Insert("INSERT INTO trip(user_id, city, preferences, budget, days, energy_level, extra, status, result) " +
-            "VALUES(#{userId}, #{city}, #{preferences}, #{budget}, #{days}, #{energyLevel}, #{extra}, #{status}, #{result})")
+    @Insert("INSERT INTO trip(user_id, city, start_date, preferences, budget, days, people_count, energy_level, transportation, extra_requirements, status, result) " +
+            "VALUES(#{userId}, #{city}, #{startDate}, #{preferences}, #{budget}, #{days}, #{peopleCount}, #{energyLevel}, #{transportation}, #{extraRequirements}, #{status}, #{result})")
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insert(Trip trip);
 
@@ -27,7 +27,7 @@ public interface TripMapper {
             "FROM trip WHERE user_id = #{userId} ORDER BY created_at DESC")
     List<TripSummary> listSummaries(@Param("userId") Long userId);
 
-    @Select("SELECT id, user_id, city, preferences, budget, days, energy_level, extra, status, created_at, updated_at " +
+    @Select("SELECT id, user_id, city, start_date, preferences, budget, days, people_count, energy_level, transportation, extra_requirements, status, created_at, updated_at " +
             "FROM trip WHERE user_id = #{userId} ORDER BY created_at DESC LIMIT #{limit}")
     List<Trip> findRecentByUser(@Param("userId") Long userId, @Param("limit") int limit);
 

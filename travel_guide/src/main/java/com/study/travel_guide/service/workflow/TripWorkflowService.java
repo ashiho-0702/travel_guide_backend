@@ -4,6 +4,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.ObjectNode;
 import com.study.travel_guide.common.BizException;
 import com.study.travel_guide.dto.GenerateRequest;
+import com.study.travel_guide.dto.TravelEnums;
 import com.study.travel_guide.entity.Trip;
 import com.study.travel_guide.entity.User;
 import com.study.travel_guide.mapper.TripMapper;
@@ -23,8 +24,10 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
@@ -204,10 +207,31 @@ public class TripWorkflowService {
 
     private void validate(GenerateRequest req) {
         if (req.getCity() == null || req.getCity().isBlank()) {
-            throw new BizException("城市不能为空");
+            throw new BizException("目的地城市不能为空");
         }
         if (req.getDays() == null || req.getDays() < 1 || req.getDays() > 15) {
             throw new BizException("天数需在 1-15 之间");
+        }
+        if (req.getPeopleCount() != null && req.getPeopleCount() < 1) {
+            throw new BizException("人数需大于 0");
+        }
+        if (req.getEnergyLevel() != null && !TravelEnums.ENERGY_LEVELS.contains(req.getEnergyLevel())) {
+            throw new BizException("体力档位不合法");
+        }
+        if (req.getPreferences() != null) {
+            for (String p : req.getPreferences()) {
+                if (p == null || !TravelEnums.PREFERENCES.contains(p)) {
+                    throw new BizException("兴趣偏好不合法: " + p);
+                }
+            }
+        }
+        if (req.getTransportation() == null || req.getTransportation().isEmpty()) {
+            throw new BizException("交通方式至少选择一项");
+        }
+        for (String t : req.getTransportation()) {
+            if (t == null || !TravelEnums.TRANSPORTATIONS.contains(t)) {
+                throw new BizException("交通方式不合法: " + t);
+            }
         }
     }
 
@@ -288,11 +312,14 @@ public class TripWorkflowService {
         Trip trip = new Trip();
         trip.setUserId(userId);
         trip.setCity(req.getCity());
-        trip.setPreferences(req.getPreferences());
+        trip.setStartDate(req.getStartDate());
+        trip.setPreferences(joinPreferences(req.getPreferences()));
         trip.setBudget(req.getBudget());
         trip.setDays(req.getDays());
+        trip.setPeopleCount(req.getPeopleCount());
         trip.setEnergyLevel(req.getEnergyLevel());
-        trip.setExtra(req.getExtra());
+        trip.setTransportation(joinTransportation(req.getTransportation()));
+        trip.setExtraRequirements(req.getExtraRequirements());
         trip.setStatus("done");
         trip.setResult(guide.toString());
         tripMapper.insert(trip);
@@ -336,8 +363,8 @@ public class TripWorkflowService {
     private String buildQuery(GenerateRequest req) {
         StringBuilder sb = new StringBuilder();
         sb.append(req.getCity()).append(' ').append(req.getDays()).append("天 旅游攻略 景点 美食");
-        if (req.getPreferences() != null && !req.getPreferences().isBlank()) {
-            sb.append(' ').append(req.getPreferences());
+        if (req.getPreferences() != null && !req.getPreferences().isEmpty()) {
+            sb.append(' ').append(joinPreferenceLabels(req.getPreferences()));
         }
         return sb.toString();
     }
@@ -345,15 +372,22 @@ public class TripWorkflowService {
     private String buildAgentQuery(GenerateRequest req, String kbContext, String memory) {
         StringBuilder sb = new StringBuilder();
         sb.append("请为以下旅行需求搜集素材：\n");
-        sb.append("- 城市：").append(req.getCity()).append('\n');
-        sb.append("- 喜好：").append(req.getPreferences() == null ? "不限" : req.getPreferences()).append('\n');
+        sb.append("- 目的地城市：").append(req.getCity()).append('\n');
+        if (req.getStartDate() != null && !req.getStartDate().isBlank()) {
+            sb.append("- 开始日期：").append(req.getStartDate()).append('\n');
+        }
         sb.append("- 天数：").append(req.getDays()).append("天\n");
+        if (req.getPeopleCount() != null) {
+            sb.append("- 人数：").append(req.getPeopleCount()).append("人\n");
+        }
+        sb.append("- 兴趣偏好：").append(joinPreferenceLabels(req.getPreferences())).append('\n');
         sb.append("- 体力：").append(energyLabel(req.getEnergyLevel())).append('\n');
         if (req.getBudget() != null && !req.getBudget().isBlank()) {
             sb.append("- 总预算：").append(req.getBudget()).append('\n');
         }
-        if (req.getExtra() != null && !req.getExtra().isBlank()) {
-            sb.append("- 其他需求：").append(req.getExtra()).append('\n');
+        sb.append("- 主要交通方式：").append(joinTransportationLabels(req.getTransportation())).append('\n');
+        if (req.getExtraRequirements() != null && !req.getExtraRequirements().isBlank()) {
+            sb.append("- 其他需求：").append(req.getExtraRequirements()).append('\n');
         }
         if (memory != null && !memory.isBlank()) {
             sb.append('\n').append(memory).append('\n');
@@ -367,13 +401,20 @@ public class TripWorkflowService {
     private String buildGeneratePrompt(GenerateRequest req, String research, String memory) {
         StringBuilder sb = new StringBuilder();
         sb.append("用户需求：\n");
-        sb.append("- 城市：").append(req.getCity()).append('\n');
-        sb.append("- 喜好：").append(req.getPreferences() == null ? "不限" : req.getPreferences()).append('\n');
-        sb.append("- 总预算：").append(req.getBudget() == null ? "不限" : req.getBudget()).append('\n');
+        sb.append("- 目的地城市：").append(req.getCity()).append('\n');
+        if (req.getStartDate() != null && !req.getStartDate().isBlank()) {
+            sb.append("- 开始日期：").append(req.getStartDate()).append('\n');
+        }
         sb.append("- 天数：").append(req.getDays()).append("天\n");
+        if (req.getPeopleCount() != null) {
+            sb.append("- 人数：").append(req.getPeopleCount()).append("人\n");
+        }
+        sb.append("- 兴趣偏好：").append(joinPreferenceLabels(req.getPreferences())).append('\n');
+        sb.append("- 总预算：").append(req.getBudget() == null ? "不限" : req.getBudget()).append('\n');
         sb.append("- 体力：").append(energyLabel(req.getEnergyLevel())).append('\n');
-        if (req.getExtra() != null && !req.getExtra().isBlank()) {
-            sb.append("- 其他需求：").append(req.getExtra()).append('\n');
+        sb.append("- 主要交通方式：").append(joinTransportationLabels(req.getTransportation())).append('\n');
+        if (req.getExtraRequirements() != null && !req.getExtraRequirements().isBlank()) {
+            sb.append("- 其他需求：").append(req.getExtraRequirements()).append('\n');
         }
         if (memory != null && !memory.isBlank()) {
             sb.append('\n').append(memory).append('\n');
@@ -388,9 +429,41 @@ public class TripWorkflowService {
             return "适中";
         }
         return switch (level) {
-            case "easy" -> "轻松（适合老人/带小孩，减少景点、放慢节奏）";
-            case "hard" -> "充沛（年轻人/特种兵，可安排更满）";
-            default -> "适中";
+            case "easy" -> "轻松（减少点位和步行距离，预留休息，适合老人或儿童）";
+            case "hard" -> "充沛（可安排更多点位，但仍需满足合理开放时间和交通时间）";
+            default -> "适中（默认强度，兼顾游览密度和休息）";
         };
+    }
+
+    private String joinPreferences(List<String> preferences) {
+        return preferences == null || preferences.isEmpty()
+                ? null
+                : String.join(",", new LinkedHashSet<>(preferences));
+    }
+
+    private String joinTransportation(List<String> transportation) {
+        return transportation == null || transportation.isEmpty()
+                ? null
+                : String.join(",", new LinkedHashSet<>(transportation));
+    }
+
+    private String joinPreferenceLabels(List<String> preferences) {
+        if (preferences == null || preferences.isEmpty()) {
+            return "不限";
+        }
+        return new LinkedHashSet<>(preferences).stream()
+                .map(TravelEnums.PREFERENCE_LABELS::get)
+                .filter(Objects::nonNull)
+                .collect(Collectors.joining("、"));
+    }
+
+    private String joinTransportationLabels(List<String> transportation) {
+        if (transportation == null || transportation.isEmpty()) {
+            return "不限";
+        }
+        return new LinkedHashSet<>(transportation).stream()
+                .map(TravelEnums.TRANSPORTATION_LABELS::get)
+                .filter(Objects::nonNull)
+                .collect(Collectors.joining("、"));
     }
 }

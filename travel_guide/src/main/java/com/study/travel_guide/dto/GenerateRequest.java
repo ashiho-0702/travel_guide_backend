@@ -2,12 +2,17 @@ package com.study.travel_guide.dto;
 
 import lombok.Data;
 
+import java.util.List;
+
 @Data
 public class GenerateRequest {
     private String city;
-    private String preferences;
-    private String budget;
+    private String startDate;
     private Integer days;
+    private Integer peopleCount;
+    private String budget;
+    private List<String> preferences;
     private String energyLevel;
-    private String extra;
+    private List<String> transportation;
+    private String extraRequirements;
 }
