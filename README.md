@@ -1,6 +1,6 @@
 # AI 旅行规划小程序（后端）
 
-文旅赛道竞赛作品。用户输入**目的地城市 / 开始日期 / 天数 / 人数 / 预算 / 兴趣偏好 / 体力 / 交通方式**，AI 结合真实口碑（小红书、B 站等）与本地知识库，自动生成「每日行程 + 地图路线」攻略；到景点后支持**语音导游**（定位/拍照识别景点 → AI 讲解 → 语音问答）。
+文旅赛道竞赛作品。用户输入**目的地城市 / 开始日期 / 天数 / 人数 / 预算 / 兴趣偏好 / 体力 / 交通方式 / 其他需求**，AI 结合真实口碑（小红书、B 站等）与本地知识库，自动生成「每日行程 + 地图路线」攻略；到景点后支持**语音导游**（定位/拍照识别景点 → AI 讲解 → 语音问答）。
 
 > 核心主题：**微信生态能力与 AI 能力有机结合**
 
@@ -11,6 +11,7 @@
 - **智能体（Agent）**：ReAct 循环 + Function Calling，自主调用「联网搜索 / 知识库检索 / 地理编码」三个工具
 - **语音导游**：定位或拍照识别景点，AI 生成讲解词并语音播报；支持多轮语音问答（带会话记忆）
 - **用户记忆**：记住历史偏好，个性化推荐
+- **增长运营**：积分体系 + 等级会员 + 邀请裂变（签到/生成攻略/邀请得积分）
 - **微信生态**：登录授权、分享、订阅消息（生成完成提醒）、小程序码触达
 - **头像存储**：阿里云 OSS 存储，返回公网 URL
 
@@ -43,7 +44,8 @@ miniProgram/
 │   │   │   ├── voice/            # 百度 ASR/TTS
 │   │   │   ├── wechat/           # 微信（access_token/订阅/小程序码）
 │   │   │   ├── qwen/             # 通义千问识图
-│   │   │   └── memory/           # 用户记忆
+│   │   │   ├── memory/           # 用户记忆
+│   │   │   └── growth/           # 增长运营（积分/签到/等级/邀请）
 │   │   ├── mapper/               # MyBatis 数据访问
 │   │   ├── config/               # 配置（JWT/CORS/OSS/RestClient）
 │   │   └── common/               # 通用（Result/BizException/JwtUtil）
@@ -121,7 +123,7 @@ curl -X POST http://localhost:8080/api/admin/seed-attractions \
 
 ## 接口概览
 
-完整接口文档见 [docs/功能与接口文档.md](docs/功能与接口文档.md)，涵盖 17 个接口（登录 / 攻略 / 语音导游 / 语音 / 用户 / 管理）。
+完整接口文档见 [docs/功能与接口文档.md](docs/功能与接口文档.md)，涵盖 21 个接口（登录 / 攻略 / 语音导游 / 语音 / 用户 / 增长 / 管理）。
 
 核心接口：
 
@@ -134,6 +136,7 @@ curl -X POST http://localhost:8080/api/admin/seed-attractions \
 | 导游 | `POST /api/guide/identify` · `POST /api/guide/narrate` · `POST /api/guide/chat` |
 | 语音 | `POST /api/voice/asr` · `POST /api/voice/tts` |
 | 用户 | `POST /api/user/profile` |
+| 增长 | `POST /api/growth/sign-in` · `GET /api/growth/summary` · `GET /api/growth/points` · `GET /api/growth/invite-info` |
 
 ## 关键约束（个人主体）
 

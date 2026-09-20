@@ -6,6 +6,7 @@ import com.study.travel_guide.common.BizException;
 import com.study.travel_guide.common.JwtUtil;
 import com.study.travel_guide.entity.User;
 import com.study.travel_guide.mapper.UserMapper;
+import com.study.travel_guide.service.growth.InviteService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -21,6 +22,7 @@ public class AuthService {
     private final JsonMapper jsonMapper;
     private final UserMapper userMapper;
     private final JwtUtil jwtUtil;
+    private final InviteService inviteService;
 
     @Value("${wechat.appid}")
     private String appid;
@@ -28,14 +30,16 @@ public class AuthService {
     @Value("${wechat.secret}")
     private String secret;
 
-    public AuthService(RestClient restClient, JsonMapper jsonMapper, UserMapper userMapper, JwtUtil jwtUtil) {
+    public AuthService(RestClient restClient, JsonMapper jsonMapper, UserMapper userMapper, JwtUtil jwtUtil,
+                       InviteService inviteService) {
         this.restClient = restClient;
         this.jsonMapper = jsonMapper;
         this.userMapper = userMapper;
         this.jwtUtil = jwtUtil;
+        this.inviteService = inviteService;
     }
 
-    public Map<String, Object> login(String code) {
+    public Map<String, Object> login(String code, Long inviterId) {
         String url = "https://api.weixin.qq.com/sns/jscode2session" +
                 "?appid={appid}&secret={secret}&js_code={code}&grant_type=authorization_code";
 
@@ -67,6 +71,9 @@ public class AuthService {
             user = new User();
             user.setOpenid(openid);
             userMapper.insert(user);
+            if (inviterId != null) {
+                inviteService.bindInvite(inviterId, user.getId());
+            }
         }
 
         String token = jwtUtil.generate(user.getId(), openid);

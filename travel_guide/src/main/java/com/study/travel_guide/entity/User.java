@@ -10,6 +10,9 @@ public class User {
     private String openid;
     private String nickname;
     private String avatarUrl;
+    private Integer points;
+    private Integer growth;
+    private Integer level;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

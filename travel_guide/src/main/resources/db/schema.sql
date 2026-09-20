@@ -6,6 +6,9 @@ CREATE TABLE IF NOT EXISTS `user` (
     openid      VARCHAR(64)  NOT NULL UNIQUE,
     nickname    VARCHAR(64),
     avatar_url  VARCHAR(255),
+    points      INT          NOT NULL DEFAULT 0,
+    growth      INT          NOT NULL DEFAULT 0,
+    level       INT          NOT NULL DEFAULT 1,
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
@@ -28,4 +31,23 @@ CREATE TABLE IF NOT EXISTS trip (
     created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at         DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_user_id (user_id)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8m
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+CREATE TABLE IF NOT EXISTS point_flow (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id    BIGINT       NOT NULL,
+    points     INT          NOT NULL,
+    type       VARCHAR(32)  NOT NULL,
+    remark     VARCHAR(255),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user_id (user_id),
+    INDEX idx_user_time (user_id, created_at)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+CREATE TABLE IF NOT EXISTS invite_relation (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    inviter_id BIGINT NOT NULL,
+    invitee_id BIGINT NOT NULL UNIQUE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_inviter (inviter_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;

@@ -22,6 +22,6 @@ public class AuthController {
 
     @PostMapping("/login")
     public Result<Map<String, Object>> login(@RequestBody LoginRequest request) {
-        return Result.ok(authService.login(request.getCode()));
+        return Result.ok(authService.login(request.getCode(), request.getInviterId()));
     }
 }

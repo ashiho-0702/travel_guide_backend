@@ -26,4 +26,10 @@ public interface UserMapper {
 
     @Update("UPDATE `user` SET avatar_url = #{avatarUrl} WHERE id = #{id}")
     int updateAvatar(@Param("id") Long id, @Param("avatarUrl") String avatarUrl);
+
+    @Update("UPDATE `user` SET points = points + #{pointsDelta}, growth = growth + #{growthDelta}, " +
+            "level = CASE WHEN growth + #{growthDelta} >= 1000 THEN 5 WHEN growth + #{growthDelta} >= 600 THEN 4 " +
+            "WHEN growth + #{growthDelta} >= 300 THEN 3 WHEN growth + #{growthDelta} >= 100 THEN 2 ELSE 1 END " +
+            "WHERE id = #{id}")
+    int addGrowth(@Param("id") Long id, @Param("pointsDelta") int pointsDelta, @Param("growthDelta") int growthDelta);
 }

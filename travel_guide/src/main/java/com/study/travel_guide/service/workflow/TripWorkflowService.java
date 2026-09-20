@@ -15,6 +15,8 @@ import com.study.travel_guide.service.agent.AgentService;
 import com.study.travel_guide.service.memory.UserMemoryService;
 import com.study.travel_guide.service.rag.IngestionService;
 import com.study.travel_guide.service.rag.RetrievalService;
+import com.study.travel_guide.service.growth.GrowthRule;
+import com.study.travel_guide.service.growth.PointService;
 import com.study.travel_guide.service.rag.RetrievedDoc;
 import com.study.travel_guide.service.wechat.SubscribeMessageService;
 import lombok.extern.slf4j.Slf4j;
@@ -91,6 +93,7 @@ public class TripWorkflowService {
     private final TripMapper tripMapper;
     private final UserMapper userMapper;
     private final SubscribeMessageService subscribeMessageService;
+    private final PointService pointService;
     private final ExecutorService taskExecutor;
 
     @Value("${workflow.reflect:true}")
@@ -105,6 +108,7 @@ public class TripWorkflowService {
                                TripMapper tripMapper,
                                UserMapper userMapper,
                                SubscribeMessageService subscribeMessageService,
+                               PointService pointService,
                                ExecutorService taskExecutor) {
         this.retrievalService = retrievalService;
         this.agentService = agentService;
@@ -115,6 +119,7 @@ public class TripWorkflowService {
         this.tripMapper = tripMapper;
         this.userMapper = userMapper;
         this.subscribeMessageService = subscribeMessageService;
+        this.pointService = pointService;
         this.taskExecutor = taskExecutor;
     }
 
@@ -142,6 +147,7 @@ public class TripWorkflowService {
         log.info("[workflow] 7/7 持久化 + RAG 摄入");
         Trip trip = persist(userId, req, guide);
         ingestKnowledge(guide, req.getCity());
+        awardTripPoints(userId);
 
         taskExecutor.execute(() -> sendSubscribeMessage(userId, req, trip));
 
@@ -159,6 +165,14 @@ public class TripWorkflowService {
             }
         } catch (Exception e) {
             log.warn("订阅消息发送失败: {}", e.getMessage());
+        }
+    }
+
+    private void awardTripPoints(Long userId) {
+        try {
+            pointService.addPoints(userId, "trip_generate", GrowthRule.TRIP_GENERATE, "生成攻略");
+        } catch (Exception e) {
+            log.warn("生成攻略加分失败: {}", e.getMessage());
         }
     }
 
@@ -192,6 +206,7 @@ public class TripWorkflowService {
             sendEvent(emitter, "step", "保存并沉淀");
             Trip trip = persist(userId, req, guide);
             ingestKnowledge(guide, req.getCity());
+            awardTripPoints(userId);
 
             sendEvent(emitter, "done", Map.of("tripId", trip.getId()));
             emitter.complete();
