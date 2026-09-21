@@ -210,6 +210,8 @@ public class TripWorkflowService {
 
             sendEvent(emitter, "done", Map.of("tripId", trip.getId()));
             emitter.complete();
+        } catch (ClientDisconnected e) {
+            log.info("客户端断开连接，中止生成: userId={}", userId);
         } catch (Exception e) {
             log.error("streaming generate failed", e);
             try {
@@ -371,7 +373,7 @@ public class TripWorkflowService {
         try {
             emitter.send(SseEmitter.event().data(Map.of("type", type, "data", data)));
         } catch (Exception e) {
-            log.warn("send event failed: {}", e.getMessage());
+            throw new ClientDisconnected(e);
         }
     }
 
@@ -480,5 +482,11 @@ public class TripWorkflowService {
                 .map(TravelEnums.TRANSPORTATION_LABELS::get)
                 .filter(Objects::nonNull)
                 .collect(Collectors.joining("、"));
+    }
+
+    private static class ClientDisconnected extends RuntimeException {
+        ClientDisconnected(Throwable cause) {
+            super(cause);
+        }
     }
 }

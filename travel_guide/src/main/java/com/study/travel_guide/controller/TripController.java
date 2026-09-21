@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.Base64;
@@ -23,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/trip")
 public class TripController {
@@ -50,8 +53,12 @@ public class TripController {
 
     @PostMapping("/generate/stream")
     public SseEmitter generateStream(@RequestAttribute("userId") Long userId,
-                                     @RequestBody GenerateRequest request) {
-        SseEmitter emitter = new SseEmitter(180_000L);
+                                     @RequestBody GenerateRequest request,
+                                     HttpServletResponse response) {
+        response.setHeader("X-Accel-Buffering", "no");
+        SseEmitter emitter = new SseEmitter(600_000L);
+        emitter.onTimeout(emitter::complete);
+        emitter.onError(ex -> log.warn("SSE 连接错误: {}", ex.getMessage()));
         taskExecutor.execute(() -> tripWorkflowService.generateStreaming(userId, request, emitter));
         return emitter;
     }
