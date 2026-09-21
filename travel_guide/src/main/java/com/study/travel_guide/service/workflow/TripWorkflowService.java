@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
 
@@ -57,16 +58,18 @@ public class TripWorkflowService {
             {
               "city": "城市名",
               "overview": "整体行程概览与建议（2-3句）",
+              "estimatedTotalCost": 1500,
               "days": [
                 {
                   "day": 1,
                   "title": "当天主题标题",
                   "theme": "主题标签",
                   "spots": [
-                    {"name": "景点名", "reason": "推荐理由", "tip": "避坑提示", "duration": "游玩时长", "transport": "到达方式"}
+                    {"name": "景点名", "reason": "推荐理由", "tip": "避坑提示", "duration": "游玩时长", "transport": "到达方式", "estimatedCostCny": 80}
                   ],
-                  "food": [{"name": "美食名", "reason": "推荐理由"}],
-                  "note": "当天注意事项"
+                  "food": [{"name": "美食名", "reason": "推荐理由", "estimatedCostCny": 50}],
+                  "note": "当天注意事项",
+                  "estimatedCostCny": 300
                 }
               ],
               "tips": ["整体避坑建议"],
@@ -80,6 +83,7 @@ public class TripWorkflowService {
             4. 根据总预算合理安排住宿/餐饮/门票，不超出预算。
             5. reason/tip 优先引用搜集到的真实信息。
             6. 结合用户历史偏好和其他需求做个性化推荐。
+            7. 费用字段均为整数（元）、不带单位、是全队合计（非人均）：spots[].estimatedCostCny 为景点门票费，food[].estimatedCostCny 为餐费，days[].estimatedCostCny 为当天预估总费用（= 当天所有景点+美食之和），estimatedTotalCost 为全程总费用（= 各天之和）。免费给 0，估算不出可省略该字段。
             """;
 
     private static final String REFLECT_SYSTEM_PROMPT = "你是严格的旅行攻略评审专家。";
@@ -124,32 +128,44 @@ public class TripWorkflowService {
     }
 
     public Map<String, Object> generate(Long userId, GenerateRequest req) {
-        log.info("[workflow] 1/7 输入校验");
+        long total = System.currentTimeMillis();
+        log.info("[workflow] 开始生成: userId={}, city={}, days={}", userId, req.getCity(), req.getDays());
+
+        long t = System.currentTimeMillis();
         validate(req);
+        log.info("[workflow] 1/7 输入校验 完成，耗时 {}ms", System.currentTimeMillis() - t);
 
         String memory = userMemoryService.buildMemoryContext(userId, 5);
 
-        log.info("[workflow] 2/7 RAG 检索知识库");
+        t = System.currentTimeMillis();
         String kbContext = retrieveKnowledge(req);
+        log.info("[workflow] 2/7 RAG 检索知识库 完成，耗时 {}ms", System.currentTimeMillis() - t);
 
-        log.info("[workflow] 3/7 Agent 工具调用");
+        t = System.currentTimeMillis();
         String research = agentService.run(AGENT_SYSTEM_PROMPT, buildAgentQuery(req, kbContext, memory), 6);
+        log.info("[workflow] 3/7 Agent 工具调用 完成，耗时 {}ms", System.currentTimeMillis() - t);
 
-        log.info("[workflow] 4/7 生成攻略");
+        t = System.currentTimeMillis();
         JsonNode guide = deepSeekService.generateJson(GUIDE_SYSTEM_PROMPT, buildGeneratePrompt(req, research, memory));
+        log.info("[workflow] 4/7 生成攻略 完成，耗时 {}ms", System.currentTimeMillis() - t);
 
-        log.info("[workflow] 5/7 反思校验");
+        t = System.currentTimeMillis();
         guide = reflectAndRefine(req, guide);
+        log.info("[workflow] 5/7 反思校验 完成，耗时 {}ms", System.currentTimeMillis() - t);
 
-        log.info("[workflow] 6/7 并行地理编码");
+        t = System.currentTimeMillis();
         fillCoordinates(guide, req.getCity());
+        log.info("[workflow] 6/7 并行地理编码 完成，耗时 {}ms", System.currentTimeMillis() - t);
 
-        log.info("[workflow] 7/7 持久化 + RAG 摄入");
+        t = System.currentTimeMillis();
         Trip trip = persist(userId, req, guide);
         ingestKnowledge(guide, req.getCity());
         awardTripPoints(userId);
+        log.info("[workflow] 7/7 持久化 + RAG 摄入 完成，耗时 {}ms", System.currentTimeMillis() - t);
 
         taskExecutor.execute(() -> sendSubscribeMessage(userId, req, trip));
+
+        log.info("[workflow] 全部完成，总耗时 {}ms, tripId={}", System.currentTimeMillis() - total, trip.getId());
 
         Map<String, Object> data = new HashMap<>();
         data.put("tripId", trip.getId());
@@ -178,37 +194,55 @@ public class TripWorkflowService {
 
     public void generateStreaming(Long userId, GenerateRequest req, SseEmitter emitter) {
         try {
+            long total = System.currentTimeMillis();
+            log.info("[workflow] 开始流式生成: userId={}, city={}, days={}", userId, req.getCity(), req.getDays());
             sendEvent(emitter, "step", "开始规划");
+
+            long t = System.currentTimeMillis();
             validate(req);
+            log.info("[workflow] 1/7 输入校验 完成，耗时 {}ms", System.currentTimeMillis() - t);
 
             String memory = userMemoryService.buildMemoryContext(userId, 5);
 
+            t = System.currentTimeMillis();
             sendEvent(emitter, "step", "检索知识库");
             String kbContext = retrieveKnowledge(req);
+            log.info("[workflow] 2/7 RAG 检索知识库 完成，耗时 {}ms", System.currentTimeMillis() - t);
 
+            t = System.currentTimeMillis();
             sendEvent(emitter, "step", "智能体搜集信息");
             String research = agentService.run(AGENT_SYSTEM_PROMPT, buildAgentQuery(req, kbContext, memory), 6,
                     progress -> sendEvent(emitter, "step", progress));
+            log.info("[workflow] 3/7 Agent 工具调用 完成，耗时 {}ms", System.currentTimeMillis() - t);
 
+            t = System.currentTimeMillis();
             sendEvent(emitter, "step", "生成攻略");
             JsonNode guide = deepSeekService.streamGenerateJson(
                     GUIDE_SYSTEM_PROMPT,
                     buildGeneratePrompt(req, research, memory),
                     token -> sendEvent(emitter, "token", token)
             );
+            log.info("[workflow] 4/7 生成攻略 完成，耗时 {}ms", System.currentTimeMillis() - t);
 
+            t = System.currentTimeMillis();
             sendEvent(emitter, "step", "反思校验");
             guide = reflectAndRefine(req, guide);
+            log.info("[workflow] 5/7 反思校验 完成，耗时 {}ms", System.currentTimeMillis() - t);
 
+            t = System.currentTimeMillis();
             sendEvent(emitter, "step", "补齐坐标");
             fillCoordinates(guide, req.getCity());
+            log.info("[workflow] 6/7 并行地理编码 完成，耗时 {}ms", System.currentTimeMillis() - t);
 
+            t = System.currentTimeMillis();
             sendEvent(emitter, "step", "保存并沉淀");
             Trip trip = persist(userId, req, guide);
             ingestKnowledge(guide, req.getCity());
             awardTripPoints(userId);
+            log.info("[workflow] 7/7 持久化 + RAG 摄入 完成，耗时 {}ms", System.currentTimeMillis() - t);
 
             sendEvent(emitter, "done", Map.of("tripId", trip.getId()));
+            log.info("[workflow] 流式生成完成，总耗时 {}ms, tripId={}", System.currentTimeMillis() - total, trip.getId());
             emitter.complete();
         } catch (ClientDisconnected e) {
             log.info("客户端断开连接，中止生成: userId={}", userId);
@@ -278,14 +312,19 @@ public class TripWorkflowService {
 
     private JsonNode reflectAndRefine(GenerateRequest req, JsonNode guide) {
         if (!reflectEnabled) {
+            log.info("[reflect] 反思校验已关闭，跳过");
             return guide;
         }
+        long t = System.currentTimeMillis();
+        log.info("[reflect] 开始反思校验");
         String userPrompt = "用户需求：城市=" + req.getCity() + "，天数=" + req.getDays()
                 + "，体力=" + energyLabel(req.getEnergyLevel()) + "，预算=" + (req.getBudget() == null ? "不限" : req.getBudget())
                 + "\n\n当前攻略 JSON：\n" + guide.toString()
                 + "\n\n请检查路线是否顺路、预算是否合理、景点强度是否匹配体力档位。若有明显问题，输出改进后的完整 JSON；若无需改进，原样输出该 JSON。只输出 JSON。";
         try {
-            return deepSeekService.generateJson(REFLECT_SYSTEM_PROMPT, userPrompt);
+            JsonNode refined = deepSeekService.generateJson(REFLECT_SYSTEM_PROMPT, userPrompt);
+            log.info("[reflect] 反思校验完成，耗时 {}ms", System.currentTimeMillis() - t);
+            return refined;
         } catch (Exception e) {
             log.warn("reflect failed, keep original: {}", e.getMessage());
             return guide;
@@ -293,10 +332,13 @@ public class TripWorkflowService {
     }
 
     private void fillCoordinates(JsonNode guide, String city) {
+        long t = System.currentTimeMillis();
         JsonNode days = guide.get("days");
         if (days == null || !days.isArray()) {
             return;
         }
+        AtomicInteger total = new AtomicInteger();
+        AtomicInteger success = new AtomicInteger();
         List<CompletableFuture<Void>> futures = new ArrayList<>();
         for (JsonNode day : days) {
             JsonNode spots = day.get("spots");
@@ -311,11 +353,13 @@ public class TripWorkflowService {
                 if (name.isBlank()) {
                     continue;
                 }
+                total.incrementAndGet();
                 futures.add(CompletableFuture.runAsync(() -> {
                     double[] coord = tencentMapService.searchLocation(name, city);
                     if (coord != null) {
                         obj.put("lat", coord[0]);
                         obj.put("lng", coord[1]);
+                        success.incrementAndGet();
                     }
                 }, taskExecutor));
             }
@@ -323,6 +367,7 @@ public class TripWorkflowService {
         if (!futures.isEmpty()) {
             CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
         }
+        log.info("[geo] 地理编码完成：景点 {} 个，成功 {} 个，耗时 {}ms", total.get(), success.get(), System.currentTimeMillis() - t);
     }
 
     private Trip persist(Long userId, GenerateRequest req, JsonNode guide) {
@@ -340,12 +385,15 @@ public class TripWorkflowService {
         trip.setStatus("done");
         trip.setResult(guide.toString());
         tripMapper.insert(trip);
+        log.info("[persist] 攻略已持久化，tripId={}", trip.getId());
         return trip;
     }
 
     private void ingestKnowledge(JsonNode guide, String city) {
         try {
-            ingestionService.ingest(guideToText(guide), city);
+            String text = guideToText(guide);
+            ingestionService.ingest(text, city);
+            log.info("[ingest] RAG 摄入完成，city={}, 文本长度={}", city, text.length());
         } catch (Exception e) {
             log.warn("RAG ingest failed: {}", e.getMessage());
         }

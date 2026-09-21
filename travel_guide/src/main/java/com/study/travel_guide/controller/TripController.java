@@ -7,6 +7,8 @@ import com.study.travel_guide.entity.Trip;
 import com.study.travel_guide.service.TripService;
 import com.study.travel_guide.service.wechat.QrCodeService;
 import com.study.travel_guide.service.workflow.TripWorkflowService;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -34,15 +36,18 @@ public class TripController {
     private final TripWorkflowService tripWorkflowService;
     private final QrCodeService qrCodeService;
     private final ExecutorService taskExecutor;
+    private final JsonMapper jsonMapper;
 
     public TripController(TripService tripService,
                           TripWorkflowService tripWorkflowService,
                           QrCodeService qrCodeService,
-                          ExecutorService taskExecutor) {
+                          ExecutorService taskExecutor,
+                          JsonMapper jsonMapper) {
         this.tripService = tripService;
         this.tripWorkflowService = tripWorkflowService;
         this.qrCodeService = qrCodeService;
         this.taskExecutor = taskExecutor;
+        this.jsonMapper = jsonMapper;
     }
 
     @PostMapping("/generate")
@@ -55,6 +60,7 @@ public class TripController {
     public SseEmitter generateStream(@RequestAttribute("userId") Long userId,
                                      @RequestBody GenerateRequest request,
                                      HttpServletResponse response) {
+        response.setHeader("Cache-Control", "no-cache");
         response.setHeader("X-Accel-Buffering", "no");
         SseEmitter emitter = new SseEmitter(600_000L);
         emitter.onTimeout(emitter::complete);
@@ -64,9 +70,36 @@ public class TripController {
     }
 
     @GetMapping("/{id}")
-    public Result<Trip> detail(@RequestAttribute("userId") Long userId,
-                               @PathVariable Long id) {
-        return Result.ok(tripService.detail(userId, id));
+    public Result<Map<String, Object>> detail(@RequestAttribute("userId") Long userId,
+                                              @PathVariable Long id) {
+        Trip trip = tripService.detail(userId, id);
+        Map<String, Object> data = new HashMap<>();
+        data.put("id", trip.getId());
+        data.put("city", trip.getCity());
+        data.put("startDate", trip.getStartDate());
+        data.put("preferences", trip.getPreferences());
+        data.put("budget", trip.getBudget());
+        data.put("days", trip.getDays());
+        data.put("peopleCount", trip.getPeopleCount());
+        data.put("energyLevel", trip.getEnergyLevel());
+        data.put("transportation", trip.getTransportation());
+        data.put("extraRequirements", trip.getExtraRequirements());
+        data.put("status", trip.getStatus());
+        data.put("createdAt", trip.getCreatedAt());
+        data.put("result", parseResult(trip.getResult()));
+        return Result.ok(data);
+    }
+
+    private JsonNode parseResult(String result) {
+        if (result == null || result.isBlank()) {
+            return null;
+        }
+        try {
+            return jsonMapper.readTree(result);
+        } catch (Exception e) {
+            log.warn("攻略 result 解析失败: {}", e.getMessage());
+            return null;
+        }
     }
 
     @GetMapping("/{id}/qrcode")
@@ -99,7 +132,7 @@ public class TripController {
         data.put("id", trip.getId());
         data.put("city", trip.getCity());
         data.put("days", trip.getDays());
-        data.put("result", trip.getResult());
+        data.put("result", parseResult(trip.getResult()));
         return Result.ok(data);
     }
 
