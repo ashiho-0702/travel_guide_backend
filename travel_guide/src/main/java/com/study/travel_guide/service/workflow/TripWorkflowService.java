@@ -30,8 +30,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
 
@@ -81,7 +79,7 @@ public class TripWorkflowService {
             2. 每天 3-5 个景点，同一片区域、路线顺路。
             3. 结合体力档位调整强度。
             4. 根据总预算合理安排住宿/餐饮/门票，不超出预算。
-            5. reason/tip 优先引用搜集到的真实信息。
+            5. reason 为 30-60 字的推荐理由，必须包含「是什么 + 一个具体亮点/玩法 + 适合什么人」，不要写「著名景点，值得一去」这类空话；reason/tip 优先引用搜集到的真实信息。
             6. 结合用户历史偏好和其他需求做个性化推荐。
             7. 费用字段均为整数（元）、不带单位、是全队合计（非人均）：spots[].estimatedCostCny 为景点门票费，food[].estimatedCostCny 为餐费，days[].estimatedCostCny 为当天预估总费用（= 当天所有景点+美食之和），estimatedTotalCost 为全程总费用（= 各天之和）。免费给 0，估算不出可省略该字段。
             """;
@@ -337,9 +335,9 @@ public class TripWorkflowService {
         if (days == null || !days.isArray()) {
             return;
         }
-        AtomicInteger total = new AtomicInteger();
-        AtomicInteger success = new AtomicInteger();
-        List<CompletableFuture<Void>> futures = new ArrayList<>();
+        int total = 0;
+        int success = 0;
+        long lastRequestAt = 0;
         for (JsonNode day : days) {
             JsonNode spots = day.get("spots");
             if (spots == null || !spots.isArray()) {
@@ -353,21 +351,27 @@ public class TripWorkflowService {
                 if (name.isBlank()) {
                     continue;
                 }
-                total.incrementAndGet();
-                futures.add(CompletableFuture.runAsync(() -> {
-                    double[] coord = tencentMapService.searchLocation(name, city);
-                    if (coord != null) {
-                        obj.put("lat", coord[0]);
-                        obj.put("lng", coord[1]);
-                        success.incrementAndGet();
+                total++;
+                // 限速：腾讯地图个人 key QPS=1，保证两次请求间隔至少 1.2 秒
+                long wait = 1200 - (System.currentTimeMillis() - lastRequestAt);
+                if (wait > 0) {
+                    try {
+                        Thread.sleep(wait);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
                     }
-                }, taskExecutor));
+                }
+                lastRequestAt = System.currentTimeMillis();
+                double[] coord = tencentMapService.searchLocation(name, city);
+                if (coord != null) {
+                    obj.put("lat", coord[0]);
+                    obj.put("lng", coord[1]);
+                    success++;
+                }
             }
         }
-        if (!futures.isEmpty()) {
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-        }
-        log.info("[geo] 地理编码完成：景点 {} 个，成功 {} 个，耗时 {}ms", total.get(), success.get(), System.currentTimeMillis() - t);
+        log.info("[geo] 地理编码完成：景点 {} 个，成功 {} 个，耗时 {}ms", total, success, System.currentTimeMillis() - t);
     }
 
     private Trip persist(Long userId, GenerateRequest req, JsonNode guide) {

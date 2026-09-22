@@ -6,4 +6,5 @@ import lombok.Data;
 public class ChatRequest {
     private String sessionId;
     private String question;
+    private String attraction;
 }

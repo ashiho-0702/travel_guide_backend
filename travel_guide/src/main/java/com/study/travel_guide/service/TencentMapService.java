@@ -34,6 +34,11 @@ public class TencentMapService {
                     .retrieve()
                     .body(String.class);
             JsonNode root = jsonMapper.readTree(json);
+            int status = root.path("status").asInt(-1);
+            if (status != 0) {
+                log.warn("[map] 地点搜索失败：keyword={}, status={}, message={}", keyword, status, root.path("message").asText());
+                return null;
+            }
             JsonNode first = root.path("data").get(0);
             if (first == null || first.isMissingNode()) {
                 return null;
@@ -51,10 +56,10 @@ public class TencentMapService {
      */
     public String searchNearby(double lat, double lng) {
         String url = "https://apis.map.qq.com/ws/place/v1/search" +
-                "?boundary=nearby({lat},{lng},1000)&key={key}";
+                "?boundary=nearby({lat},{lng},3000)&filter=category={category}&key={key}";
         try {
             String json = restClient.get()
-                    .uri(url, lat, lng, mapKey)
+                    .uri(url, lat, lng, "旅游景点,教育机构,文化场馆", mapKey)
                     .retrieve()
                     .body(String.class);
             log.info("[map] 周边搜索响应（前 400 字符）：{}",

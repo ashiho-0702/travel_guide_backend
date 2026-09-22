@@ -51,15 +51,17 @@ public class ConversationService {
         this.deepSeekService = deepSeekService;
     }
 
-    public Map<String, Object> chat(String sessionId, String question) {
+    public Map<String, Object> chat(String sessionId, String question, String attraction) {
         if (sessionId == null || sessionId.isBlank()) {
             sessionId = UUID.randomUUID().toString();
         }
         List<Map<String, String>> history = loadHistory(sessionId);
 
+        boolean hasAttraction = attraction != null && !attraction.isBlank();
+
         String kbContext = "";
         try {
-            List<RetrievedDoc> docs = knowledgeService.search(question, null, 3);
+            List<RetrievedDoc> docs = knowledgeService.search(question, hasAttraction ? attraction : null, 3);
             if (!docs.isEmpty()) {
                 kbContext = docs.stream().map(RetrievedDoc::text).collect(Collectors.joining("\n---\n"));
             }
@@ -69,7 +71,8 @@ public class ConversationService {
 
         String webContext = "";
         try {
-            List<SearchItem> results = bochaSearchService.search(question, 5, false);
+            String searchQuery = hasAttraction ? attraction + " " + question : question;
+            List<SearchItem> results = bochaSearchService.search(searchQuery, 5, false);
             if (!results.isEmpty()) {
                 StringBuilder sb = new StringBuilder();
                 for (SearchItem r : results) {
@@ -86,7 +89,9 @@ public class ConversationService {
             context.append(msg.get("role")).append('：').append(msg.get("content")).append('\n');
         }
 
+        String attractionCtx = hasAttraction ? "\n用户当前所在景点：" + attraction : "";
         String userPrompt = "历史对话：\n" + context
+                + attractionCtx
                 + "\n当前问题：" + question
                 + "\n\n知识库素材：\n" + kbContext
                 + "\n\n联网搜索素材：\n" + webContext
