@@ -56,10 +56,10 @@ public class TencentMapService {
      */
     public String searchNearby(double lat, double lng) {
         String url = "https://apis.map.qq.com/ws/place/v1/search" +
-                "?boundary=nearby({lat},{lng},3000)&filter=category={category}&key={key}";
+                "?boundary=nearby({lat},{lng},3000)&key={key}";
         try {
             String json = restClient.get()
-                    .uri(url, lat, lng, "旅游景点,教育机构,文化场馆", mapKey)
+                    .uri(url, lat, lng, mapKey)
                     .retrieve()
                     .body(String.class);
             log.info("[map] 周边搜索响应（前 400 字符）：{}",
