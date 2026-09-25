@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 @Slf4j
@@ -31,6 +32,11 @@ public class AgentService {
     }
 
     public String run(String systemPrompt, String userQuery, int maxIterations, Consumer<String> onProgress) {
+        return run(systemPrompt, userQuery, maxIterations, onProgress, null);
+    }
+
+    public String run(String systemPrompt, String userQuery, int maxIterations,
+                      Consumer<String> onProgress, BiConsumer<String, String> onResult) {
         List<Map<String, Object>> messages = new ArrayList<>();
         messages.add(Map.of("role", "system", "content", systemPrompt));
         messages.add(Map.of("role", "user", "content", userQuery));
@@ -66,6 +72,9 @@ public class AgentService {
 
                 String result = executeTool(name, args);
                 log.info("[agent] 工具 {} 执行完成", name);
+                if (onResult != null) {
+                    onResult.accept(name, result);
+                }
                 messages.add(Map.of("role", "tool", "tool_call_id", id, "content", result));
             }
         }

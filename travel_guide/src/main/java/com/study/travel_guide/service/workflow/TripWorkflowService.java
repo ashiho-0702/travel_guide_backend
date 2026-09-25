@@ -31,6 +31,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Consumer;
 import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
 
@@ -137,7 +138,7 @@ public class TripWorkflowService {
         String memory = userMemoryService.buildMemoryContext(userId, 5);
 
         t = System.currentTimeMillis();
-        String kbContext = retrieveKnowledge(req);
+        String kbContext = retrieveKnowledge(req, null);
         log.info("[workflow] 2/7 RAG 检索知识库 完成，耗时 {}ms", System.currentTimeMillis() - t);
 
         t = System.currentTimeMillis();
@@ -206,13 +207,14 @@ public class TripWorkflowService {
 
             t = System.currentTimeMillis();
             sendEvent(emitter, "step", "检索知识库");
-            String kbContext = retrieveKnowledge(req);
+            String kbContext = retrieveKnowledge(req, text -> sendEvent(emitter, "search", Map.of("source", "知识库", "content", text)));
             log.info("[workflow] 2/7 RAG 检索知识库 完成，耗时 {}ms", System.currentTimeMillis() - t);
 
             t = System.currentTimeMillis();
             sendEvent(emitter, "step", "智能体搜集信息");
             String research = agentService.run(AGENT_SYSTEM_PROMPT, buildAgentQuery(req, kbContext, memory), 6,
-                    progress -> sendEvent(emitter, "step", progress));
+                    progress -> sendEvent(emitter, "step", progress),
+                    (name, result) -> sendEvent(emitter, "search", Map.of("source", toolLabel(name), "content", result)));
             log.info("[workflow] 3/7 Agent 工具调用 完成，耗时 {}ms", System.currentTimeMillis() - t);
 
             t = System.currentTimeMillis();
@@ -287,7 +289,7 @@ public class TripWorkflowService {
         }
     }
 
-    private String retrieveKnowledge(GenerateRequest req) {
+    private String retrieveKnowledge(GenerateRequest req, Consumer<String> onHit) {
         String query = buildQuery(req);
         log.info("[rag] 检索知识库，query={}, city={}", query, req.getCity());
         try {
@@ -298,6 +300,9 @@ public class TripWorkflowService {
             }
             for (int i = 0; i < docs.size(); i++) {
                 RetrievedDoc d = docs.get(i);
+                if (onHit != null) {
+                    onHit.accept(d.text());
+                }
                 String preview = d.text();
                 if (preview.length() > 100) {
                     preview = preview.substring(0, 100) + "...";
@@ -309,6 +314,15 @@ public class TripWorkflowService {
             log.warn("[rag] 检索失败，降级为无知识库生成: {}", e.getMessage());
             return "";
         }
+    }
+
+    private String toolLabel(String name) {
+        return switch (name) {
+            case "search_web" -> "联网搜索";
+            case "search_kb" -> "知识库";
+            case "geocode" -> "地理编码";
+            default -> name;
+        };
     }
 
     private JsonNode reflectAndRefine(GenerateRequest req, JsonNode guide) {

@@ -9,6 +9,7 @@ import com.study.travel_guide.dto.MoveSpotRequest;
 import com.study.travel_guide.dto.TripSummary;
 import com.study.travel_guide.dto.UpdateResultRequest;
 import com.study.travel_guide.entity.Trip;
+import com.study.travel_guide.service.TripPdfService;
 import com.study.travel_guide.service.TripService;
 import com.study.travel_guide.service.wechat.QrCodeService;
 import com.study.travel_guide.service.workflow.TripWorkflowService;
@@ -28,6 +29,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
@@ -44,17 +46,20 @@ public class TripController {
     private final QrCodeService qrCodeService;
     private final ExecutorService taskExecutor;
     private final JsonMapper jsonMapper;
+    private final TripPdfService tripPdfService;
 
     public TripController(TripService tripService,
                           TripWorkflowService tripWorkflowService,
                           QrCodeService qrCodeService,
                           ExecutorService taskExecutor,
-                          JsonMapper jsonMapper) {
+                          JsonMapper jsonMapper,
+                          TripPdfService tripPdfService) {
         this.tripService = tripService;
         this.tripWorkflowService = tripWorkflowService;
         this.qrCodeService = qrCodeService;
         this.taskExecutor = taskExecutor;
         this.jsonMapper = jsonMapper;
+        this.tripPdfService = tripPdfService;
     }
 
     @PostMapping("/generate")
@@ -107,6 +112,16 @@ public class TripController {
             log.warn("攻略 result 解析失败: {}", e.getMessage());
             return null;
         }
+    }
+
+    @GetMapping("/{id}/pdf")
+    public void exportPdf(@RequestAttribute("userId") Long userId,
+                          @PathVariable Long id,
+                          HttpServletResponse response) throws IOException {
+        byte[] pdf = tripPdfService.exportPdf(userId, id);
+        response.setContentType("application/pdf");
+        response.setHeader("Content-Disposition", "inline; filename=\"trip-" + id + ".pdf\"");
+        response.getOutputStream().write(pdf);
     }
 
     @GetMapping("/{id}/qrcode")

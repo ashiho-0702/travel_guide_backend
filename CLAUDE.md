@@ -26,3 +26,7 @@ AI 旅行规划微信小程序（文旅赛道竞赛作品）。用户输入目�
 - 攻略生成：`service/workflow/TripWorkflowService`（7 步工作流）+ `service/agent/`（智能体）+ `service/rag/`（RAG）
 - 语音导游：`service/guide/`（识别/讲解/对话/种子灌入）+ `service/qwen/QwenVlService`（识图）
 - 接口：`/api/auth`、`/api/trip`、`/api/guide`、`/api/admin`
+
+## 文档规范
+
+- **接口文档**（`docs/功能与接口文档.md`）：每个接口必须写全——接口地址+请求方式、接口描述、请求头、请求参数（路径/query/body 的字段名/类型/必传/说明）、响应参数（成功响应示例 + 字段说明）、业务异常。不允许只写「接口描述 + 业务异常」。
