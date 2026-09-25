@@ -45,7 +45,7 @@ public class TripPdfService {
 
     private String buildHtml(Trip trip, JsonNode guide) {
         StringBuilder sb = new StringBuilder();
-        sb.append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\">");
+        sb.append("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"/>");
         sb.append("<style>");
         sb.append("body{font-family:'SimHei',sans-serif;font-size:12px;color:#333;}");
         sb.append("h1{text-align:center;}");

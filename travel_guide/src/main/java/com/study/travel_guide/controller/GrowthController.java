@@ -6,9 +6,11 @@ import com.study.travel_guide.mapper.PointFlowMapper;
 import com.study.travel_guide.service.growth.CheckInService;
 import com.study.travel_guide.service.growth.InviteService;
 import com.study.travel_guide.service.growth.PointService;
+import com.study.travel_guide.service.growth.RedeemService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -22,13 +24,16 @@ public class GrowthController {
     private final CheckInService checkInService;
     private final PointService pointService;
     private final InviteService inviteService;
+    private final RedeemService redeemService;
     private final PointFlowMapper pointFlowMapper;
 
     public GrowthController(CheckInService checkInService, PointService pointService,
-                            InviteService inviteService, PointFlowMapper pointFlowMapper) {
+                            InviteService inviteService, RedeemService redeemService,
+                            PointFlowMapper pointFlowMapper) {
         this.checkInService = checkInService;
         this.pointService = pointService;
         this.inviteService = inviteService;
+        this.redeemService = redeemService;
         this.pointFlowMapper = pointFlowMapper;
     }
 
@@ -50,5 +55,16 @@ public class GrowthController {
     @GetMapping("/invite-info")
     public Result<Map<String, Object>> inviteInfo(@RequestAttribute("userId") Long userId) {
         return Result.ok(inviteService.inviteInfo(userId));
+    }
+
+    @GetMapping("/redeem-items")
+    public Result<List<Map<String, Object>>> redeemItems() {
+        return Result.ok(redeemService.redeemItems());
+    }
+
+    @PostMapping("/redeem")
+    public Result<Map<String, Object>> redeem(@RequestAttribute("userId") Long userId,
+                                              @RequestBody Map<String, String> body) {
+        return Result.ok(redeemService.redeem(userId, body.get("itemId")));
     }
 }

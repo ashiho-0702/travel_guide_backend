@@ -8,6 +8,7 @@ import com.study.travel_guide.service.guide.AttractionIdentifyService;
 import com.study.travel_guide.service.guide.ConversationService;
 import com.study.travel_guide.service.guide.TourGuideService;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -31,8 +32,9 @@ public class GuideController {
     }
 
     @PostMapping("/identify")
-    public Result<Map<String, Object>> identify(@RequestBody IdentifyRequest request) {
-        return Result.ok(identifyService.identify(request.getLat(), request.getLng(), request.getImage()));
+    public Result<Map<String, Object>> identify(@RequestAttribute("userId") Long userId,
+                                                @RequestBody IdentifyRequest request) {
+        return Result.ok(identifyService.identify(userId, request.getLat(), request.getLng(), request.getImage()));
     }
 
     @PostMapping("/narrate")

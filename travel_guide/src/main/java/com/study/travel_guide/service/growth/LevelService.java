@@ -13,6 +13,7 @@ public class LevelService {
         Map<String, Object> data = new HashMap<>();
         data.put("level", level);
         data.put("title", GrowthRule.levelTitle(level));
+        data.put("benefits", GrowthRule.benefitsOf(level));
         data.put("nextLevelGrowth", GrowthRule.nextLevelGrowth(growth));
         return data;
     }
