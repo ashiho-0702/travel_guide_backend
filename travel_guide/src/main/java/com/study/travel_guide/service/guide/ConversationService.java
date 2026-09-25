@@ -6,6 +6,7 @@ import com.study.travel_guide.service.BochaSearchService;
 import com.study.travel_guide.service.DeepSeekService;
 import com.study.travel_guide.service.SearchItem;
 import com.study.travel_guide.service.rag.RetrievedDoc;
+import com.study.travel_guide.service.wechat.ContentSecurityService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -38,20 +39,26 @@ public class ConversationService {
     private final AttractionKnowledgeService knowledgeService;
     private final BochaSearchService bochaSearchService;
     private final DeepSeekService deepSeekService;
+    private final ContentSecurityService contentSecurityService;
 
     public ConversationService(StringRedisTemplate redisTemplate,
                                JsonMapper jsonMapper,
                                AttractionKnowledgeService knowledgeService,
                                BochaSearchService bochaSearchService,
-                               DeepSeekService deepSeekService) {
+                               DeepSeekService deepSeekService,
+                               ContentSecurityService contentSecurityService) {
         this.redisTemplate = redisTemplate;
         this.jsonMapper = jsonMapper;
         this.knowledgeService = knowledgeService;
         this.bochaSearchService = bochaSearchService;
         this.deepSeekService = deepSeekService;
+        this.contentSecurityService = contentSecurityService;
     }
 
-    public Map<String, Object> chat(String sessionId, String question, String attraction) {
+    public Map<String, Object> chat(Long userId, String sessionId, String question, String attraction) {
+        if (question != null && !question.isBlank()) {
+            contentSecurityService.checkText(userId, question, ContentSecurityService.SCENE_COMMENT);
+        }
         if (sessionId == null || sessionId.isBlank()) {
             sessionId = UUID.randomUUID().toString();
         }

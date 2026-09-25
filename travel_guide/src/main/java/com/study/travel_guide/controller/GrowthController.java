@@ -3,6 +3,7 @@ package com.study.travel_guide.controller;
 import com.study.travel_guide.common.Result;
 import com.study.travel_guide.entity.PointFlow;
 import com.study.travel_guide.mapper.PointFlowMapper;
+import com.study.travel_guide.service.growth.AchievementService;
 import com.study.travel_guide.service.growth.CheckInService;
 import com.study.travel_guide.service.growth.InviteService;
 import com.study.travel_guide.service.growth.PointService;
@@ -25,15 +26,17 @@ public class GrowthController {
     private final PointService pointService;
     private final InviteService inviteService;
     private final RedeemService redeemService;
+    private final AchievementService achievementService;
     private final PointFlowMapper pointFlowMapper;
 
     public GrowthController(CheckInService checkInService, PointService pointService,
                             InviteService inviteService, RedeemService redeemService,
-                            PointFlowMapper pointFlowMapper) {
+                            AchievementService achievementService, PointFlowMapper pointFlowMapper) {
         this.checkInService = checkInService;
         this.pointService = pointService;
         this.inviteService = inviteService;
         this.redeemService = redeemService;
+        this.achievementService = achievementService;
         this.pointFlowMapper = pointFlowMapper;
     }
 
@@ -66,5 +69,10 @@ public class GrowthController {
     public Result<Map<String, Object>> redeem(@RequestAttribute("userId") Long userId,
                                               @RequestBody Map<String, String> body) {
         return Result.ok(redeemService.redeem(userId, body.get("itemId")));
+    }
+
+    @GetMapping("/achievements")
+    public Result<List<Map<String, Object>>> achievements(@RequestAttribute("userId") Long userId) {
+        return Result.ok(achievementService.achievements(userId));
     }
 }

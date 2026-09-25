@@ -50,4 +50,13 @@ public interface TripMapper {
 
     @Select("SELECT * FROM trip WHERE share_token = #{token}")
     Trip findByShareToken(@Param("token") String token);
+
+    @Select("SELECT COUNT(*) FROM trip WHERE user_id = #{userId}")
+    int countByUser(@Param("userId") Long userId);
+
+    @Select("SELECT COUNT(DISTINCT city) FROM trip WHERE user_id = #{userId}")
+    int countDistinctCity(@Param("userId") Long userId);
+
+    @Select("SELECT COUNT(*) FROM trip WHERE user_id = #{userId} AND is_favorite = 1")
+    int countFavorite(@Param("userId") Long userId);
 }

@@ -1,6 +1,7 @@
 package com.study.travel_guide.service;
 
 import com.study.travel_guide.mapper.UserMapper;
+import com.study.travel_guide.service.wechat.ContentSecurityService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -14,10 +15,13 @@ public class UserService {
 
     private final UserMapper userMapper;
     private final OssService ossService;
+    private final ContentSecurityService contentSecurityService;
 
-    public UserService(UserMapper userMapper, OssService ossService) {
+    public UserService(UserMapper userMapper, OssService ossService,
+                       ContentSecurityService contentSecurityService) {
         this.userMapper = userMapper;
         this.ossService = ossService;
+        this.contentSecurityService = contentSecurityService;
     }
 
     public Map<String, String> updateProfile(Long userId, String nickname, String avatarBase64) {
@@ -27,6 +31,7 @@ public class UserService {
         }
 
         if (nickname != null && !nickname.isBlank()) {
+            contentSecurityService.checkText(userId, nickname, ContentSecurityService.SCENE_PROFILE);
             userMapper.updateNickname(userId, nickname);
         }
         if (avatarUrl != null) {

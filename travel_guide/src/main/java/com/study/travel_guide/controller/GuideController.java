@@ -43,7 +43,8 @@ public class GuideController {
     }
 
     @PostMapping("/chat")
-    public Result<Map<String, Object>> chat(@RequestBody ChatRequest request) {
-        return Result.ok(conversationService.chat(request.getSessionId(), request.getQuestion(), request.getAttraction()));
+    public Result<Map<String, Object>> chat(@RequestAttribute("userId") Long userId,
+                                            @RequestBody ChatRequest request) {
+        return Result.ok(conversationService.chat(userId, request.getSessionId(), request.getQuestion(), request.getAttraction()));
     }
 }

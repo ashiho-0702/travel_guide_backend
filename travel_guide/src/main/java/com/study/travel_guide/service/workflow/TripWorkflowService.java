@@ -19,6 +19,7 @@ import com.study.travel_guide.service.rag.RetrievalService;
 import com.study.travel_guide.service.growth.GrowthRule;
 import com.study.travel_guide.service.growth.PointService;
 import com.study.travel_guide.service.rag.RetrievedDoc;
+import com.study.travel_guide.service.wechat.ContentSecurityService;
 import com.study.travel_guide.service.wechat.SubscribeMessageService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -97,6 +98,7 @@ public class TripWorkflowService {
     private final TripMapper tripMapper;
     private final UserMapper userMapper;
     private final SubscribeMessageService subscribeMessageService;
+    private final ContentSecurityService contentSecurityService;
     private final PointService pointService;
     private final ExecutorService taskExecutor;
 
@@ -112,6 +114,7 @@ public class TripWorkflowService {
                                TripMapper tripMapper,
                                UserMapper userMapper,
                                SubscribeMessageService subscribeMessageService,
+                               ContentSecurityService contentSecurityService,
                                PointService pointService,
                                ExecutorService taskExecutor) {
         this.retrievalService = retrievalService;
@@ -123,6 +126,7 @@ public class TripWorkflowService {
         this.tripMapper = tripMapper;
         this.userMapper = userMapper;
         this.subscribeMessageService = subscribeMessageService;
+        this.contentSecurityService = contentSecurityService;
         this.pointService = pointService;
         this.taskExecutor = taskExecutor;
     }
@@ -133,6 +137,7 @@ public class TripWorkflowService {
 
         long t = System.currentTimeMillis();
         validate(req);
+        checkContent(userId, req);
         log.info("[workflow] 1/7 输入校验 完成，耗时 {}ms", System.currentTimeMillis() - t);
 
         String memory = userMemoryService.buildMemoryContext(userId, 5);
@@ -201,6 +206,7 @@ public class TripWorkflowService {
 
             long t = System.currentTimeMillis();
             validate(req);
+            checkContent(userId, req);
             log.info("[workflow] 1/7 输入校验 完成，耗时 {}ms", System.currentTimeMillis() - t);
 
             String memory = userMemoryService.buildMemoryContext(userId, 5);
@@ -286,6 +292,12 @@ public class TripWorkflowService {
             if (t == null || !TravelEnums.TRANSPORTATIONS.contains(t)) {
                 throw new BizException("交通方式不合法: " + t);
             }
+        }
+    }
+
+    private void checkContent(Long userId, GenerateRequest req) {
+        if (req.getExtraRequirements() != null && !req.getExtraRequirements().isBlank()) {
+            contentSecurityService.checkText(userId, req.getExtraRequirements(), ContentSecurityService.SCENE_COMMENT);
         }
     }
 

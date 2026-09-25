@@ -16,4 +16,7 @@ public interface PointFlowMapper {
 
     @Select("SELECT * FROM point_flow WHERE user_id = #{userId} ORDER BY created_at DESC LIMIT #{limit}")
     List<PointFlow> listByUser(@Param("userId") Long userId, @Param("limit") int limit);
+
+    @Select("SELECT COUNT(*) FROM point_flow WHERE user_id = #{userId} AND type = #{type}")
+    int countByType(@Param("userId") Long userId, @Param("type") String type);
 }
