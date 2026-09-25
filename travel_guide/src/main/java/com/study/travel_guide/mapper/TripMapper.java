@@ -40,6 +40,9 @@ public interface TripMapper {
     @Update("UPDATE trip SET share_token = NULL WHERE id = #{id} AND user_id = #{userId}")
     int clearShareToken(@Param("id") Long id, @Param("userId") Long userId);
 
+    @Update("UPDATE trip SET result = #{result} WHERE id = #{id} AND user_id = #{userId}")
+    int updateResult(@Param("id") Long id, @Param("userId") Long userId, @Param("result") String result);
+
     @Select("SELECT * FROM trip WHERE share_token = #{token}")
     Trip findByShareToken(@Param("token") String token);
 }

@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 import java.nio.charset.StandardCharsets;
@@ -43,12 +44,21 @@ public class QrCodeService {
         body.put("check_path", false);
         body.put("env_version", envVersion);
 
-        byte[] image = restClient.post()
-                .uri(url, token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(body)
-                .retrieve()
-                .body(byte[].class);
+        byte[] image;
+        try {
+            image = restClient.post()
+                    .uri(url, token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(body)
+                    .retrieve()
+                    .body(byte[].class);
+        } catch (HttpClientErrorException e) {
+            int code = e.getStatusCode().value();
+            if (code == 412) {
+                throw new BizException(502, "小程序码生成失败：小程序还没有「" + envVersion + "」版本，请先在开发者工具上传代码");
+            }
+            throw new BizException(502, "小程序码生成失败(" + code + ")");
+        }
 
         if (image == null || image.length == 0) {
             throw new BizException(502, "小程序码生成返回空");

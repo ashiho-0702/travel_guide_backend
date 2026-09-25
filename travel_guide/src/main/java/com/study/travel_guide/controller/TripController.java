@@ -1,8 +1,13 @@
 package com.study.travel_guide.controller;
 
 import com.study.travel_guide.common.Result;
+import com.study.travel_guide.dto.AddSpotRequest;
+import com.study.travel_guide.dto.DeleteSpotRequest;
+import com.study.travel_guide.dto.EditSpotRequest;
 import com.study.travel_guide.dto.GenerateRequest;
+import com.study.travel_guide.dto.MoveSpotRequest;
 import com.study.travel_guide.dto.TripSummary;
+import com.study.travel_guide.dto.UpdateResultRequest;
 import com.study.travel_guide.entity.Trip;
 import com.study.travel_guide.service.TripService;
 import com.study.travel_guide.service.wechat.QrCodeService;
@@ -13,6 +18,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -145,6 +151,47 @@ public class TripController {
     public Result<Void> delete(@RequestAttribute("userId") Long userId,
                                @PathVariable Long id) {
         tripService.delete(userId, id);
+        return Result.ok();
+    }
+
+    @PostMapping("/{id}/spot")
+    public Result<Void> addSpot(@RequestAttribute("userId") Long userId,
+                                @PathVariable Long id,
+                                @RequestBody AddSpotRequest request) {
+        tripService.addSpot(userId, id, request.getDayIndex(), request.getSpot());
+        return Result.ok();
+    }
+
+    @PutMapping("/{id}/spot")
+    public Result<Void> editSpot(@RequestAttribute("userId") Long userId,
+                                 @PathVariable Long id,
+                                 @RequestBody EditSpotRequest request) {
+        tripService.editSpot(userId, id, request.getDayIndex(), request.getSpotIndex(), request.getSpot());
+        return Result.ok();
+    }
+
+    @DeleteMapping("/{id}/spot")
+    public Result<Void> deleteSpot(@RequestAttribute("userId") Long userId,
+                                   @PathVariable Long id,
+                                   @RequestBody DeleteSpotRequest request) {
+        tripService.deleteSpot(userId, id, request.getDayIndex(), request.getSpotIndex());
+        return Result.ok();
+    }
+
+    @PutMapping("/{id}/spot/move")
+    public Result<Void> moveSpot(@RequestAttribute("userId") Long userId,
+                                 @PathVariable Long id,
+                                 @RequestBody MoveSpotRequest request) {
+        tripService.moveSpot(userId, id, request.getFromDay(), request.getFromSpot(),
+                request.getToDay(), request.getToSpot());
+        return Result.ok();
+    }
+
+    @PutMapping("/{id}/result")
+    public Result<Void> updateResult(@RequestAttribute("userId") Long userId,
+                                     @PathVariable Long id,
+                                     @RequestBody UpdateResultRequest request) {
+        tripService.updateResult(userId, id, request.getResult());
         return Result.ok();
     }
 }
