@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import jakarta.servlet.http.HttpServletResponse;
@@ -143,8 +144,23 @@ public class TripController {
     }
 
     @GetMapping("/list")
-    public Result<List<TripSummary>> list(@RequestAttribute("userId") Long userId) {
-        return Result.ok(tripService.list(userId));
+    public Result<List<TripSummary>> list(@RequestAttribute("userId") Long userId,
+                                          @RequestParam(required = false) Boolean favorite) {
+        return Result.ok(tripService.list(userId, favorite));
+    }
+
+    @PostMapping("/{id}/favorite")
+    public Result<Void> favorite(@RequestAttribute("userId") Long userId,
+                                 @PathVariable Long id) {
+        tripService.favorite(userId, id);
+        return Result.ok();
+    }
+
+    @DeleteMapping("/{id}/favorite")
+    public Result<Void> unfavorite(@RequestAttribute("userId") Long userId,
+                                   @PathVariable Long id) {
+        tripService.unfavorite(userId, id);
+        return Result.ok();
     }
 
     @DeleteMapping("/{id}")

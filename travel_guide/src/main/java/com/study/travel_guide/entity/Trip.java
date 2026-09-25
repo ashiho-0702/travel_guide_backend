@@ -18,6 +18,7 @@ public class Trip {
     private String transportation;
     private String extraRequirements;
     private String shareToken;
+    private Boolean isFavorite;
     private String status;
     private String result;
     private LocalDateTime createdAt;

@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS trip (
     extra_requirements VARCHAR(255),
     share_token        VARCHAR(64),
     status             VARCHAR(16)  DEFAULT 'done',
+    is_favorite        TINYINT(1)   NOT NULL DEFAULT 0,
     result             JSON,
     created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at         DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

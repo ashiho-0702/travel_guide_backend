@@ -1,6 +1,7 @@
 package com.study.travel_guide.service.workflow;
 
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 import com.study.travel_guide.common.BizException;
 import com.study.travel_guide.dto.GenerateRequest;
@@ -153,6 +154,7 @@ public class TripWorkflowService {
 
         t = System.currentTimeMillis();
         fillCoordinates(guide, req.getCity());
+        optimizeOrder(guide);
         log.info("[workflow] 6/7 并行地理编码 完成，耗时 {}ms", System.currentTimeMillis() - t);
 
         t = System.currentTimeMillis();
@@ -230,6 +232,7 @@ public class TripWorkflowService {
             t = System.currentTimeMillis();
             sendEvent(emitter, "step", "补齐坐标");
             fillCoordinates(guide, req.getCity());
+            optimizeOrder(guide);
             log.info("[workflow] 6/7 并行地理编码 完成，耗时 {}ms", System.currentTimeMillis() - t);
 
             t = System.currentTimeMillis();
@@ -372,6 +375,70 @@ public class TripWorkflowService {
             }
         }
         log.info("[geo] 地理编码完成：景点 {} 个，成功 {} 个，耗时 {}ms", total, success, System.currentTimeMillis() - t);
+    }
+
+    private void optimizeOrder(JsonNode guide) {
+        JsonNode daysNode = guide.get("days");
+        if (!(daysNode instanceof ArrayNode days)) {
+            return;
+        }
+        for (JsonNode dayNode : days) {
+            if (dayNode instanceof ObjectNode day && day.get("spots") instanceof ArrayNode spots && spots.size() > 2) {
+                reorderSpots(spots);
+            }
+        }
+    }
+
+    private void reorderSpots(ArrayNode spots) {
+        List<ObjectNode> withCoord = new ArrayList<>();
+        List<ObjectNode> noCoord = new ArrayList<>();
+        for (JsonNode spot : spots) {
+            if (spot instanceof ObjectNode obj) {
+                if (obj.has("lat") && obj.has("lng")) {
+                    withCoord.add(obj);
+                } else {
+                    noCoord.add(obj);
+                }
+            }
+        }
+        if (withCoord.size() <= 1) {
+            return;
+        }
+        // 最近邻贪心：从第一个有坐标的景点出发，每次选离当前最近的未访问景点
+        List<ObjectNode> ordered = new ArrayList<>();
+        ObjectNode current = withCoord.get(0);
+        ordered.add(current);
+        boolean[] visited = new boolean[withCoord.size()];
+        visited[0] = true;
+        for (int i = 1; i < withCoord.size(); i++) {
+            double curLat = current.get("lat").asDouble();
+            double curLng = current.get("lng").asDouble();
+            int nearest = -1;
+            double minDist = Double.MAX_VALUE;
+            for (int j = 1; j < withCoord.size(); j++) {
+                if (visited[j]) {
+                    continue;
+                }
+                ObjectNode candidate = withCoord.get(j);
+                double lat = candidate.get("lat").asDouble();
+                double lng = candidate.get("lng").asDouble();
+                double dist = (lat - curLat) * (lat - curLat) + (lng - curLng) * (lng - curLng);
+                if (dist < minDist) {
+                    minDist = dist;
+                    nearest = j;
+                }
+            }
+            current = withCoord.get(nearest);
+            visited[nearest] = true;
+            ordered.add(current);
+        }
+        spots.removeAll();
+        for (ObjectNode obj : ordered) {
+            spots.add(obj);
+        }
+        for (ObjectNode obj : noCoord) {
+            spots.add(obj);
+        }
     }
 
     private Trip persist(Long userId, GenerateRequest req, JsonNode guide) {

@@ -23,9 +23,11 @@ public interface TripMapper {
     @Select("SELECT * FROM trip WHERE id = #{id} AND user_id = #{userId}")
     Trip findByIdAndUser(@Param("id") Long id, @Param("userId") Long userId);
 
-    @Select("SELECT id, CONCAT(city, ' ', days, '天') AS title, created_at " +
-            "FROM trip WHERE user_id = #{userId} ORDER BY created_at DESC")
-    List<TripSummary> listSummaries(@Param("userId") Long userId);
+    @Select("<script>SELECT id, CONCAT(city, ' ', days, '天') AS title, is_favorite, created_at " +
+            "FROM trip WHERE user_id = #{userId} " +
+            "<if test='favorite != null'>AND is_favorite = #{favorite}</if> " +
+            "ORDER BY created_at DESC</script>")
+    List<TripSummary> listSummaries(@Param("userId") Long userId, @Param("favorite") Boolean favorite);
 
     @Select("SELECT id, user_id, city, start_date, preferences, budget, days, people_count, energy_level, transportation, extra_requirements, status, created_at, updated_at " +
             "FROM trip WHERE user_id = #{userId} ORDER BY created_at DESC LIMIT #{limit}")
@@ -42,6 +44,9 @@ public interface TripMapper {
 
     @Update("UPDATE trip SET result = #{result} WHERE id = #{id} AND user_id = #{userId}")
     int updateResult(@Param("id") Long id, @Param("userId") Long userId, @Param("result") String result);
+
+    @Update("UPDATE trip SET is_favorite = #{favorite} WHERE id = #{id} AND user_id = #{userId}")
+    int updateFavorite(@Param("id") Long id, @Param("userId") Long userId, @Param("favorite") boolean favorite);
 
     @Select("SELECT * FROM trip WHERE share_token = #{token}")
     Trip findByShareToken(@Param("token") String token);

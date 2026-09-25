@@ -32,8 +32,18 @@ public class TripService {
         return trip;
     }
 
-    public List<TripSummary> list(Long userId) {
-        return tripMapper.listSummaries(userId);
+    public List<TripSummary> list(Long userId, Boolean favorite) {
+        return tripMapper.listSummaries(userId, favorite);
+    }
+
+    public void favorite(Long userId, Long id) {
+        detail(userId, id);
+        tripMapper.updateFavorite(id, userId, true);
+    }
+
+    public void unfavorite(Long userId, Long id) {
+        detail(userId, id);
+        tripMapper.updateFavorite(id, userId, false);
     }
 
     public void delete(Long userId, Long id) {
@@ -111,9 +121,6 @@ public class TripService {
         }
         JsonNode moved = fromSpots.remove(fromSpot);
         int insertAt = toSpot;
-        if (fromDay == toDay && toSpot > fromSpot) {
-            insertAt--;
-        }
         if (insertAt < 0) insertAt = 0;
         if (insertAt > toSpots.size()) insertAt = toSpots.size();
         toSpots.insert(insertAt, moved);
