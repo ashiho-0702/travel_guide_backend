@@ -49,7 +49,7 @@ public class TripReplanService {
         contentSecurityService.checkText(userId, instruction, ContentSecurityService.SCENE_COMMENT);
 
         long t = System.currentTimeMillis();
-        Trip trip = tripService.detail(userId, tripId);
+        Trip trip = tripService.detailAsMember(userId, tripId);
         JsonNode current;
         try {
             current = jsonMapper.readTree(trip.getResult());

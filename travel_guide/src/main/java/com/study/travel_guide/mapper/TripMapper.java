@@ -24,6 +24,10 @@ public interface TripMapper {
     @Select("SELECT * FROM trip WHERE id = #{id} AND user_id = #{userId}")
     Trip findByIdAndUser(@Param("id") Long id, @Param("userId") Long userId);
 
+    @Select("SELECT t.* FROM trip t WHERE t.id = #{id} AND (t.user_id = #{userId} " +
+            "OR EXISTS (SELECT 1 FROM trip_collaborator c WHERE c.trip_id = t.id AND c.user_id = #{userId}))")
+    Trip findByIdAndMember(@Param("id") Long id, @Param("userId") Long userId);
+
     @Select("<script>SELECT id, city, days, start_date, CONCAT(city, ' ', days, '天') AS title, is_favorite, created_at " +
             "FROM trip WHERE user_id = #{userId} " +
             "<if test='favorite != null'>AND is_favorite = #{favorite}</if> " +
@@ -43,8 +47,8 @@ public interface TripMapper {
     @Update("UPDATE trip SET share_token = NULL WHERE id = #{id} AND user_id = #{userId}")
     int clearShareToken(@Param("id") Long id, @Param("userId") Long userId);
 
-    @Update("UPDATE trip SET result = #{result} WHERE id = #{id} AND user_id = #{userId}")
-    int updateResult(@Param("id") Long id, @Param("userId") Long userId, @Param("result") String result);
+    @Update("UPDATE trip SET result = #{result} WHERE id = #{id}")
+    int updateResultById(@Param("id") Long id, @Param("result") String result);
 
     @Update("UPDATE trip SET is_favorite = #{favorite} WHERE id = #{id} AND user_id = #{userId}")
     int updateFavorite(@Param("id") Long id, @Param("userId") Long userId, @Param("favorite") boolean favorite);

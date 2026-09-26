@@ -89,7 +89,7 @@ public class TripController {
     @GetMapping("/{id}")
     public Result<Map<String, Object>> detail(@RequestAttribute("userId") Long userId,
                                               @PathVariable Long id) {
-        Trip trip = tripService.detail(userId, id);
+        Trip trip = tripService.detailAsMember(userId, id);
         Map<String, Object> data = new HashMap<>();
         data.put("id", trip.getId());
         data.put("city", trip.getCity());
@@ -167,6 +167,27 @@ public class TripController {
     public Result<List<TripSummary>> list(@RequestAttribute("userId") Long userId,
                                           @RequestParam(required = false) Boolean favorite) {
         return Result.ok(tripService.list(userId, favorite));
+    }
+
+    @PostMapping("/join")
+    public Result<Map<String, Object>> join(@RequestAttribute("userId") Long userId,
+                                            @RequestBody Map<String, String> body) {
+        Long tripId = tripService.join(userId, body.get("token"));
+        return Result.ok(Map.of("tripId", tripId));
+    }
+
+    @GetMapping("/{id}/collaborators")
+    public Result<List<Map<String, Object>>> collaborators(@RequestAttribute("userId") Long userId,
+                                                           @PathVariable Long id) {
+        return Result.ok(tripService.listCollaborators(userId, id));
+    }
+
+    @DeleteMapping("/{id}/collaborator/{userId}")
+    public Result<Void> removeCollaborator(@RequestAttribute("userId") Long ownerId,
+                                           @PathVariable Long id,
+                                           @PathVariable Long userId) {
+        tripService.removeCollaborator(ownerId, id, userId);
+        return Result.ok();
     }
 
     @PostMapping("/{id}/favorite")

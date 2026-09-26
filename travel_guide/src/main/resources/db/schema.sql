@@ -8,6 +8,8 @@ USE travel_guide;
 --   ALTER TABLE `user` ADD COLUMN growth INT NOT NULL DEFAULT 0;
 --   ALTER TABLE `user` ADD COLUMN level INT NOT NULL DEFAULT 1;
 --   ALTER TABLE `user` ADD COLUMN is_admin TINYINT(1) NOT NULL DEFAULT 0;
+-- 新增的表（如 trip_collaborator）重新执行本文件即可创建，无需 ALTER：
+--   CREATE TABLE IF NOT EXISTS trip_collaborator (...) —— 见文件末尾
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS `user` (
@@ -61,4 +63,14 @@ CREATE TABLE IF NOT EXISTS invite_relation (
     invitee_id BIGINT NOT NULL UNIQUE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_inviter (inviter_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+-- 多人协作：行程成员（owner 之外可共同编辑的协作者）
+CREATE TABLE IF NOT EXISTS trip_collaborator (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    trip_id    BIGINT NOT NULL,
+    user_id    BIGINT NOT NULL,
+    joined_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_trip_user (trip_id, user_id),
+    INDEX idx_trip (trip_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;

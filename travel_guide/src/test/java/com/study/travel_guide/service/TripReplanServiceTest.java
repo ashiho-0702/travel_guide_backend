@@ -41,7 +41,7 @@ class TripReplanServiceTest {
         Trip trip = new Trip();
         trip.setCity("杭州");
         trip.setResult(OLD);
-        when(tripService.detail(1L, 10L)).thenReturn(trip);
+        when(tripService.detailAsMember(1L, 10L)).thenReturn(trip);
 
         JsonNode newResult = JSON.readTree(NEW);
         when(deepSeekService.generateJson(anyString(), anyString())).thenReturn(newResult);

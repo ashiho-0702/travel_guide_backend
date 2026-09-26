@@ -28,7 +28,7 @@ public class TripPdfService {
     }
 
     public byte[] exportPdf(Long userId, Long id) {
-        Trip trip = tripService.detail(userId, id);
+        Trip trip = tripService.detailAsMember(userId, id);
         JsonNode guide = parseResult(trip.getResult());
         String html = buildHtml(trip, guide);
         return htmlToPdf(html);
