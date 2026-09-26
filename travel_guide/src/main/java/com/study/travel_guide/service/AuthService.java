@@ -80,6 +80,8 @@ public class AuthService {
                 inviteService.bindInvite(inviterId, user.getId());
                 log.info("绑定邀请: inviterId={}, inviteeId={}", inviterId, user.getId());
             }
+            // 回读一次，让 points/growth/level/is_admin 等 DB 默认值（而非 null）写进响应
+            user = userMapper.findById(user.getId());
         }
 
         String token = jwtUtil.generate(user.getId(), openid);
