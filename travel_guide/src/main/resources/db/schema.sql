@@ -1,6 +1,15 @@
 CREATE DATABASE IF NOT EXISTS travel_guide DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 USE travel_guide;
 
+-- ============================================================
+-- 迁移说明：以下建表语句都带 IF NOT EXISTS，对「已存在的库」不会自动加新列。
+-- 若你的库是早期创建的，请手动执行对应 ALTER 补列（重复执行会报错，先确认列不存在）：
+--   ALTER TABLE `user` ADD COLUMN points INT NOT NULL DEFAULT 0;
+--   ALTER TABLE `user` ADD COLUMN growth INT NOT NULL DEFAULT 0;
+--   ALTER TABLE `user` ADD COLUMN level INT NOT NULL DEFAULT 1;
+--   ALTER TABLE `user` ADD COLUMN is_admin TINYINT(1) NOT NULL DEFAULT 0;
+-- ============================================================
+
 CREATE TABLE IF NOT EXISTS `user` (
     id          BIGINT AUTO_INCREMENT PRIMARY KEY,
     openid      VARCHAR(64)  NOT NULL UNIQUE,
@@ -9,6 +18,7 @@ CREATE TABLE IF NOT EXISTS `user` (
     points      INT          NOT NULL DEFAULT 0,
     growth      INT          NOT NULL DEFAULT 0,
     level       INT          NOT NULL DEFAULT 1,
+    is_admin    TINYINT(1)   NOT NULL DEFAULT 0,
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;

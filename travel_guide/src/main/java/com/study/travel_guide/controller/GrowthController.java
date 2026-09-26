@@ -8,6 +8,7 @@ import com.study.travel_guide.service.growth.CheckInService;
 import com.study.travel_guide.service.growth.InviteService;
 import com.study.travel_guide.service.growth.PointService;
 import com.study.travel_guide.service.growth.RedeemService;
+import com.study.travel_guide.service.growth.TripReportService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
@@ -28,16 +29,19 @@ public class GrowthController {
     private final RedeemService redeemService;
     private final AchievementService achievementService;
     private final PointFlowMapper pointFlowMapper;
+    private final TripReportService tripReportService;
 
     public GrowthController(CheckInService checkInService, PointService pointService,
                             InviteService inviteService, RedeemService redeemService,
-                            AchievementService achievementService, PointFlowMapper pointFlowMapper) {
+                            AchievementService achievementService, PointFlowMapper pointFlowMapper,
+                            TripReportService tripReportService) {
         this.checkInService = checkInService;
         this.pointService = pointService;
         this.inviteService = inviteService;
         this.redeemService = redeemService;
         this.achievementService = achievementService;
         this.pointFlowMapper = pointFlowMapper;
+        this.tripReportService = tripReportService;
     }
 
     @PostMapping("/sign-in")
@@ -74,5 +78,10 @@ public class GrowthController {
     @GetMapping("/achievements")
     public Result<List<Map<String, Object>>> achievements(@RequestAttribute("userId") Long userId) {
         return Result.ok(achievementService.achievements(userId));
+    }
+
+    @GetMapping("/report")
+    public Result<Map<String, Object>> report(@RequestAttribute("userId") Long userId) {
+        return Result.ok(tripReportService.report(userId));
     }
 }

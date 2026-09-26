@@ -13,6 +13,7 @@ public class User {
     private Integer points;
     private Integer growth;
     private Integer level;
+    private Boolean isAdmin;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

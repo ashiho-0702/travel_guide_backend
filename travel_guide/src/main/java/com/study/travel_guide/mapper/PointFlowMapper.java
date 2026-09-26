@@ -19,4 +19,7 @@ public interface PointFlowMapper {
 
     @Select("SELECT COUNT(*) FROM point_flow WHERE user_id = #{userId} AND type = #{type}")
     int countByType(@Param("userId") Long userId, @Param("type") String type);
+
+    @Select("SELECT COUNT(*) FROM point_flow WHERE type = #{type}")
+    int countAllByType(@Param("type") String type);
 }

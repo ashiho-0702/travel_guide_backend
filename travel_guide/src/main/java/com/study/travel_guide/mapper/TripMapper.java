@@ -11,6 +11,7 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
+import java.util.Map;
 
 @Mapper
 public interface TripMapper {
@@ -59,4 +60,13 @@ public interface TripMapper {
 
     @Select("SELECT COUNT(*) FROM trip WHERE user_id = #{userId} AND is_favorite = 1")
     int countFavorite(@Param("userId") Long userId);
+
+    @Select("SELECT COUNT(*) FROM trip")
+    int countAll();
+
+    @Select("SELECT COUNT(DISTINCT user_id) FROM trip WHERE DATE(created_at) = CURDATE()")
+    int countDistinctUserToday();
+
+    @Select("SELECT city, COUNT(*) AS cnt FROM trip GROUP BY city ORDER BY cnt DESC LIMIT 5")
+    List<Map<String, Object>> topCities();
 }
