@@ -8,6 +8,9 @@ import java.time.LocalDateTime;
 public class TripSummary {
     private Long id;
     private String title;
+    private String city;
+    private Integer days;
+    private String startDate;
     private Boolean isFavorite;
     private LocalDateTime createdAt;
 }

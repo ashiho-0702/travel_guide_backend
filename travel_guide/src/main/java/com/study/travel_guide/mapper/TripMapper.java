@@ -24,7 +24,7 @@ public interface TripMapper {
     @Select("SELECT * FROM trip WHERE id = #{id} AND user_id = #{userId}")
     Trip findByIdAndUser(@Param("id") Long id, @Param("userId") Long userId);
 
-    @Select("<script>SELECT id, CONCAT(city, ' ', days, '天') AS title, is_favorite, created_at " +
+    @Select("<script>SELECT id, city, days, start_date, CONCAT(city, ' ', days, '天') AS title, is_favorite, created_at " +
             "FROM trip WHERE user_id = #{userId} " +
             "<if test='favorite != null'>AND is_favorite = #{favorite}</if> " +
             "ORDER BY created_at DESC</script>")
