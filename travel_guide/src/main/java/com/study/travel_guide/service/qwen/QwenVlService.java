@@ -36,12 +36,14 @@ public class QwenVlService {
     }
 
     /**
-     * 识别图片中的景点名。image 可以是公网 URL 或 data:image/...;base64,... 字符串。
+     * 识别图片中的景点名。image 可以是公网 URL、data:image/...;base64,... 或裸 base64。
      */
     public String identifyAttraction(String image) {
+        String url = toImageUrl(image);
+        log.info("[qwen-vl] 识图请求 image 长度={}", image == null ? 0 : image.length());
         Map<String, Object> imagePart = new HashMap<>();
         imagePart.put("type", "image_url");
-        imagePart.put("image_url", Map.of("url", image));
+        imagePart.put("image_url", Map.of("url", url));
 
         Map<String, Object> textPart = Map.of(
                 "type", "text",
@@ -76,5 +78,17 @@ public class QwenVlService {
         } catch (Exception e) {
             throw new BizException(500, "通义千问返回解析失败: " + e.getMessage());
         }
+    }
+
+    // qwen-vl 的 image_url.url 只接受公网 URL 或 data URI，裸 base64 会报「URL 不合法」，这里补前缀
+    private String toImageUrl(String image) {
+        if (image == null) {
+            return null;
+        }
+        String trimmed = image.trim();
+        if (trimmed.startsWith("data:") || trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+            return trimmed;
+        }
+        return "data:image/jpeg;base64," + trimmed;
     }
 }
