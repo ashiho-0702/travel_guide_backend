@@ -12,6 +12,7 @@ import com.study.travel_guide.mapper.TripMapper;
 import com.study.travel_guide.mapper.UserMapper;
 import com.study.travel_guide.service.DeepSeekService;
 import com.study.travel_guide.service.TencentMapService;
+import com.study.travel_guide.service.WeatherService;
 import com.study.travel_guide.service.agent.AgentService;
 import com.study.travel_guide.service.memory.UserMemoryService;
 import com.study.travel_guide.service.rag.IngestionService;
@@ -26,6 +27,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -85,6 +87,7 @@ public class TripWorkflowService {
             5. reason 为 30-60 字的推荐理由，必须包含「是什么 + 一个具体亮点/玩法 + 适合什么人」，不要写「著名景点，值得一去」这类空话；reason/tip 优先引用搜集到的真实信息。
             6. 结合用户历史偏好和其他需求做个性化推荐。
             7. 费用字段均为整数（元）、不带单位、是全队合计（非人均）：spots[].estimatedCostCny 为景点门票费，food[].estimatedCostCny 为餐费，days[].estimatedCostCny 为当天预估总费用（= 当天所有景点+美食之和），estimatedTotalCost 为全程总费用（= 各天之和）。免费给 0，估算不出可省略该字段。
+            8. 若用户需求里提供了「天气与季节」，据此调整：雨天把户外/远足景点换成室内或调整到晴天，晴天优先户外；在每天 note 里加一句天气提示；结合季节推荐应季景观（如春赏樱、秋赏红叶/银杏、冬赏冰雪/温泉）。
             """;
 
     private static final String REFLECT_SYSTEM_PROMPT = "你是严格的旅行攻略评审专家。";
@@ -93,6 +96,7 @@ public class TripWorkflowService {
     private final AgentService agentService;
     private final DeepSeekService deepSeekService;
     private final TencentMapService tencentMapService;
+    private final WeatherService weatherService;
     private final IngestionService ingestionService;
     private final UserMemoryService userMemoryService;
     private final TripMapper tripMapper;
@@ -109,6 +113,7 @@ public class TripWorkflowService {
                                AgentService agentService,
                                DeepSeekService deepSeekService,
                                TencentMapService tencentMapService,
+                               WeatherService weatherService,
                                IngestionService ingestionService,
                                UserMemoryService userMemoryService,
                                TripMapper tripMapper,
@@ -121,6 +126,7 @@ public class TripWorkflowService {
         this.agentService = agentService;
         this.deepSeekService = deepSeekService;
         this.tencentMapService = tencentMapService;
+        this.weatherService = weatherService;
         this.ingestionService = ingestionService;
         this.userMemoryService = userMemoryService;
         this.tripMapper = tripMapper;
@@ -151,7 +157,9 @@ public class TripWorkflowService {
         log.info("[workflow] 3/7 Agent 工具调用 完成，耗时 {}ms", System.currentTimeMillis() - t);
 
         t = System.currentTimeMillis();
-        JsonNode guide = deepSeekService.generateJson(GUIDE_SYSTEM_PROMPT, buildGeneratePrompt(req, research, memory));
+        String weatherContext = buildWeatherContext(req);
+        log.info("[weather] 天气与季节：{}", weatherContext.isBlank() ? "无（未填日期或查询失败）" : weatherContext.replace('\n', ' '));
+        JsonNode guide = deepSeekService.generateJson(GUIDE_SYSTEM_PROMPT, buildGeneratePrompt(req, research, memory, weatherContext));
         log.info("[workflow] 4/7 生成攻略 完成，耗时 {}ms", System.currentTimeMillis() - t);
 
         t = System.currentTimeMillis();
@@ -224,10 +232,13 @@ public class TripWorkflowService {
             log.info("[workflow] 3/7 Agent 工具调用 完成，耗时 {}ms", System.currentTimeMillis() - t);
 
             t = System.currentTimeMillis();
+            sendEvent(emitter, "step", "查询天气");
+            String weatherContext = buildWeatherContext(req);
+            log.info("[weather] 天气与季节：{}", weatherContext.isBlank() ? "无（未填日期或查询失败）" : weatherContext.replace('\n', ' '));
             sendEvent(emitter, "step", "生成攻略");
             JsonNode guide = deepSeekService.streamGenerateJson(
                     GUIDE_SYSTEM_PROMPT,
-                    buildGeneratePrompt(req, research, memory),
+                    buildGeneratePrompt(req, research, memory, weatherContext),
                     token -> sendEvent(emitter, "token", token)
             );
             log.info("[workflow] 4/7 生成攻略 完成，耗时 {}ms", System.currentTimeMillis() - t);
@@ -560,7 +571,7 @@ public class TripWorkflowService {
         return sb.toString();
     }
 
-    private String buildGeneratePrompt(GenerateRequest req, String research, String memory) {
+    private String buildGeneratePrompt(GenerateRequest req, String research, String memory, String weatherContext) {
         StringBuilder sb = new StringBuilder();
         sb.append("用户需求：\n");
         sb.append("- 目的地城市：").append(req.getCity()).append('\n');
@@ -581,9 +592,57 @@ public class TripWorkflowService {
         if (memory != null && !memory.isBlank()) {
             sb.append('\n').append(memory).append('\n');
         }
+        if (weatherContext != null && !weatherContext.isBlank()) {
+            sb.append("\n天气与季节：\n").append(weatherContext).append('\n');
+        }
         sb.append("\n以下是搜集到的行程素材：\n").append(research);
         sb.append("\n请输出 JSON。");
         return sb.toString();
+    }
+
+    private String buildWeatherContext(GenerateRequest req) {
+        LocalDate start = parseStartDate(req.getStartDate());
+        StringBuilder sb = new StringBuilder();
+        if (start != null) {
+            sb.append("- 旅行时间：").append(req.getStartDate()).append(" 起 ").append(req.getDays()).append(" 天");
+            sb.append("（").append(seasonOf(start.getMonthValue())).append("）\n");
+        }
+        Map<String, String> forecast = start == null ? null : weatherService.forecast(req.getCity());
+        if (forecast != null && !forecast.isEmpty()) {
+            sb.append("- 天气预报（未来 3 天）：\n");
+            for (int i = 0; i < req.getDays(); i++) {
+                String date = start.plusDays(i).toString();
+                String w = forecast.get(date);
+                if (w != null) {
+                    sb.append("  第 ").append(i + 1).append(" 天（").append(date).append("）：").append(w).append('\n');
+                }
+            }
+        }
+        return sb.toString();
+    }
+
+    static LocalDate parseStartDate(String startDate) {
+        if (startDate == null || startDate.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(startDate);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    static String seasonOf(int month) {
+        if (month >= 3 && month <= 5) {
+            return "春季，可关注樱花/桃花等应季花卉";
+        }
+        if (month >= 6 && month <= 8) {
+            return "夏季，注意防晒避暑，可关注水上/避暑项目";
+        }
+        if (month >= 9 && month <= 11) {
+            return "秋季，可关注红叶/银杏等应季景观";
+        }
+        return "冬季，可关注冰雪/温泉项目";
     }
 
     private String energyLabel(String level) {
