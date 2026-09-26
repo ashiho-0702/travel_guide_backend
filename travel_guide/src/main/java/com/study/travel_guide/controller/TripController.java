@@ -6,10 +6,12 @@ import com.study.travel_guide.dto.DeleteSpotRequest;
 import com.study.travel_guide.dto.EditSpotRequest;
 import com.study.travel_guide.dto.GenerateRequest;
 import com.study.travel_guide.dto.MoveSpotRequest;
+import com.study.travel_guide.dto.ReplanRequest;
 import com.study.travel_guide.dto.TripSummary;
 import com.study.travel_guide.dto.UpdateResultRequest;
 import com.study.travel_guide.entity.Trip;
 import com.study.travel_guide.service.TripPdfService;
+import com.study.travel_guide.service.TripReplanService;
 import com.study.travel_guide.service.TripService;
 import com.study.travel_guide.service.wechat.QrCodeService;
 import com.study.travel_guide.service.workflow.TripWorkflowService;
@@ -47,19 +49,22 @@ public class TripController {
     private final ExecutorService taskExecutor;
     private final JsonMapper jsonMapper;
     private final TripPdfService tripPdfService;
+    private final TripReplanService tripReplanService;
 
     public TripController(TripService tripService,
                           TripWorkflowService tripWorkflowService,
                           QrCodeService qrCodeService,
                           ExecutorService taskExecutor,
                           JsonMapper jsonMapper,
-                          TripPdfService tripPdfService) {
+                          TripPdfService tripPdfService,
+                          TripReplanService tripReplanService) {
         this.tripService = tripService;
         this.tripWorkflowService = tripWorkflowService;
         this.qrCodeService = qrCodeService;
         this.taskExecutor = taskExecutor;
         this.jsonMapper = jsonMapper;
         this.tripPdfService = tripPdfService;
+        this.tripReplanService = tripReplanService;
     }
 
     @PostMapping("/generate")
@@ -224,5 +229,12 @@ public class TripController {
                                      @RequestBody UpdateResultRequest request) {
         tripService.updateResult(userId, id, request.getResult());
         return Result.ok();
+    }
+
+    @PostMapping("/{id}/replan")
+    public Result<JsonNode> replan(@RequestAttribute("userId") Long userId,
+                                   @PathVariable Long id,
+                                   @RequestBody ReplanRequest request) {
+        return Result.ok(tripReplanService.replan(userId, id, request.getInstruction()));
     }
 }
