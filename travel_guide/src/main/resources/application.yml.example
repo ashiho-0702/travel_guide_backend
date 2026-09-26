@@ -74,3 +74,10 @@ aliyun:
     bucket-name: YOUR_BUCKET_NAME
     access-key-id: YOUR_ACCESS_KEY_ID
     access-key-secret: YOUR_ACCESS_KEY_SECRET
+
+# Swagger / OpenAPI（接口文档，可选，默认路径已可用）
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
