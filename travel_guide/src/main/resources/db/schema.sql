@@ -74,3 +74,13 @@ CREATE TABLE IF NOT EXISTS trip_collaborator (
     UNIQUE KEY uk_trip_user (trip_id, user_id),
     INDEX idx_trip (trip_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+-- 行李清单：每个行程一份，逐项增删改/勾选
+CREATE TABLE IF NOT EXISTS packing_item (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    trip_id    BIGINT NOT NULL,
+    name       VARCHAR(128) NOT NULL,
+    checked    TINYINT(1)  NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_trip (trip_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;

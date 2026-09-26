@@ -6,10 +6,13 @@ import com.study.travel_guide.dto.DeleteSpotRequest;
 import com.study.travel_guide.dto.EditSpotRequest;
 import com.study.travel_guide.dto.GenerateRequest;
 import com.study.travel_guide.dto.MoveSpotRequest;
+import com.study.travel_guide.dto.PackingItemRequest;
 import com.study.travel_guide.dto.ReplanRequest;
 import com.study.travel_guide.dto.TripSummary;
 import com.study.travel_guide.dto.UpdateResultRequest;
+import com.study.travel_guide.entity.PackingItem;
 import com.study.travel_guide.entity.Trip;
+import com.study.travel_guide.service.PackingService;
 import com.study.travel_guide.service.TripPdfService;
 import com.study.travel_guide.service.TripReplanService;
 import com.study.travel_guide.service.TripService;
@@ -50,6 +53,7 @@ public class TripController {
     private final JsonMapper jsonMapper;
     private final TripPdfService tripPdfService;
     private final TripReplanService tripReplanService;
+    private final PackingService packingService;
 
     public TripController(TripService tripService,
                           TripWorkflowService tripWorkflowService,
@@ -57,7 +61,8 @@ public class TripController {
                           ExecutorService taskExecutor,
                           JsonMapper jsonMapper,
                           TripPdfService tripPdfService,
-                          TripReplanService tripReplanService) {
+                          TripReplanService tripReplanService,
+                          PackingService packingService) {
         this.tripService = tripService;
         this.tripWorkflowService = tripWorkflowService;
         this.qrCodeService = qrCodeService;
@@ -65,6 +70,7 @@ public class TripController {
         this.jsonMapper = jsonMapper;
         this.tripPdfService = tripPdfService;
         this.tripReplanService = tripReplanService;
+        this.packingService = packingService;
     }
 
     @PostMapping("/generate")
@@ -257,5 +263,41 @@ public class TripController {
                                    @PathVariable Long id,
                                    @RequestBody ReplanRequest request) {
         return Result.ok(tripReplanService.replan(userId, id, request.getInstruction()));
+    }
+
+    @GetMapping("/{id}/packing")
+    public Result<List<PackingItem>> packingList(@RequestAttribute("userId") Long userId,
+                                                 @PathVariable Long id) {
+        return Result.ok(packingService.list(userId, id));
+    }
+
+    @PostMapping("/{id}/packing/generate")
+    public Result<List<PackingItem>> packingGenerate(@RequestAttribute("userId") Long userId,
+                                                     @PathVariable Long id) {
+        return Result.ok(packingService.generate(userId, id));
+    }
+
+    @PostMapping("/{id}/packing")
+    public Result<List<PackingItem>> packingAdd(@RequestAttribute("userId") Long userId,
+                                                @PathVariable Long id,
+                                                @RequestBody PackingItemRequest request) {
+        return Result.ok(packingService.add(userId, id, request.getName()));
+    }
+
+    @PutMapping("/{id}/packing/{itemId}")
+    public Result<Void> packingUpdate(@RequestAttribute("userId") Long userId,
+                                      @PathVariable Long id,
+                                      @PathVariable Long itemId,
+                                      @RequestBody PackingItemRequest request) {
+        packingService.update(userId, id, itemId, request.getName(), request.getChecked());
+        return Result.ok();
+    }
+
+    @DeleteMapping("/{id}/packing/{itemId}")
+    public Result<Void> packingDelete(@RequestAttribute("userId") Long userId,
+                                      @PathVariable Long id,
+                                      @PathVariable Long itemId) {
+        packingService.delete(userId, id, itemId);
+        return Result.ok();
     }
 }
