@@ -26,13 +26,16 @@ public class TripService {
     private final JsonMapper jsonMapper;
     private final TripCollaboratorMapper tripCollaboratorMapper;
     private final UserMapper userMapper;
+    private final TencentMapService tencentMapService;
 
     public TripService(TripMapper tripMapper, JsonMapper jsonMapper,
-                       TripCollaboratorMapper tripCollaboratorMapper, UserMapper userMapper) {
+                       TripCollaboratorMapper tripCollaboratorMapper, UserMapper userMapper,
+                       TencentMapService tencentMapService) {
         this.tripMapper = tripMapper;
         this.jsonMapper = jsonMapper;
         this.tripCollaboratorMapper = tripCollaboratorMapper;
         this.userMapper = userMapper;
+        this.tencentMapService = tencentMapService;
     }
 
     public Trip detail(Long userId, Long id) {
@@ -246,5 +249,84 @@ public class TripService {
             total += dayTotal;
         }
         root.put("estimatedTotalCost", total);
+    }
+
+    /**
+     * 从当前位置出发重排某天景点（最近邻），并返回相邻点之间的腾讯路线距离（米）。
+     */
+    public Map<String, Object> reorderFromLocation(Long userId, Long tripId, double lat, double lng, int dayIndex) {
+        ObjectNode root = loadResult(userId, tripId);
+        ObjectNode day = getDay(root, dayIndex);
+        ArrayNode spots = (ArrayNode) day.get("spots");
+        if (spots == null || spots.size() == 0) {
+            throw new BizException(400, "当天没有景点");
+        }
+
+        List<ObjectNode> withCoord = new ArrayList<>();
+        for (JsonNode s : spots) {
+            if (s instanceof ObjectNode obj && obj.has("lat") && obj.has("lng")) {
+                withCoord.add(obj);
+            }
+        }
+
+        List<ObjectNode> ordered = new ArrayList<>();
+        double curLat = lat, curLng = lng;
+        boolean[] visited = new boolean[withCoord.size()];
+        for (int i = 0; i < withCoord.size(); i++) {
+            int nearest = -1;
+            double minDist = Double.MAX_VALUE;
+            for (int j = 0; j < withCoord.size(); j++) {
+                if (visited[j]) continue;
+                double d = sqDist(curLat, curLng, withCoord.get(j));
+                if (d < minDist) {
+                    minDist = d;
+                    nearest = j;
+                }
+            }
+            ObjectNode next = withCoord.get(nearest);
+            ordered.add(next);
+            visited[nearest] = true;
+            curLat = next.get("lat").asDouble();
+            curLng = next.get("lng").asDouble();
+        }
+
+        List<Map<String, Object>> route = new ArrayList<>();
+        long lastRequestAt = 0;
+        double fromLat = lat, fromLng = lng;
+        for (ObjectNode s : ordered) {
+            double sLat = s.get("lat").asDouble();
+            double sLng = s.get("lng").asDouble();
+            long wait = 1200 - (System.currentTimeMillis() - lastRequestAt);
+            if (wait > 0) {
+                try {
+                    Thread.sleep(wait);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+            lastRequestAt = System.currentTimeMillis();
+            Map<String, Integer> info = tencentMapService.routeInfo(fromLat, fromLng, sLat, sLng);
+            Map<String, Object> step = new HashMap<>();
+            step.put("name", s.path("name").asText());
+            step.put("lat", sLat);
+            step.put("lng", sLng);
+            step.put("distance", info == null ? null : info.get("distance"));
+            step.put("duration", info == null ? null : info.get("duration"));
+            route.add(step);
+            fromLat = sLat;
+            fromLng = sLng;
+        }
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("dayIndex", dayIndex);
+        data.put("route", route);
+        return data;
+    }
+
+    private double sqDist(double lat1, double lng1, ObjectNode spot) {
+        double dlat = lat1 - spot.get("lat").asDouble();
+        double dlng = lng1 - spot.get("lng").asDouble();
+        return dlat * dlat + dlng * dlng;
     }
 }

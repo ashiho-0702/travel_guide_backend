@@ -1,5 +1,6 @@
 package com.study.travel_guide.controller;
 
+import com.study.travel_guide.common.BizException;
 import com.study.travel_guide.common.Result;
 import com.study.travel_guide.dto.AddSpotRequest;
 import com.study.travel_guide.dto.DeleteSpotRequest;
@@ -9,6 +10,7 @@ import com.study.travel_guide.dto.GenerateRequest;
 import com.study.travel_guide.dto.MoveSpotRequest;
 import com.study.travel_guide.dto.PackingItemRequest;
 import com.study.travel_guide.dto.ReplanRequest;
+import com.study.travel_guide.dto.ReorderFromRequest;
 import com.study.travel_guide.dto.TripSummary;
 import com.study.travel_guide.dto.UpdateResultRequest;
 import com.study.travel_guide.entity.Expense;
@@ -354,5 +356,16 @@ public class TripController {
                                       @PathVariable Long expenseId) {
         expenseService.delete(userId, id, expenseId);
         return Result.ok();
+    }
+
+    @PostMapping("/{id}/reorder-from")
+    public Result<Map<String, Object>> reorderFrom(@RequestAttribute("userId") Long userId,
+                                                   @PathVariable Long id,
+                                                   @RequestBody ReorderFromRequest request) {
+        if (request.getLat() == null || request.getLng() == null) {
+            throw new BizException(400, "请传入当前位置 lat/lng");
+        }
+        int dayIndex = request.getDayIndex() == null ? 0 : request.getDayIndex();
+        return Result.ok(tripService.reorderFromLocation(userId, id, request.getLat(), request.getLng(), dayIndex));
     }
 }

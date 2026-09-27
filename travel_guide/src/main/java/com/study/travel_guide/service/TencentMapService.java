@@ -7,6 +7,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import java.util.HashMap;
+import java.util.Map;
+
 @Slf4j
 @Service
 public class TencentMapService {
@@ -79,6 +82,33 @@ public class TencentMapService {
             return name == null || name.isBlank() ? null : name;
         } catch (Exception e) {
             log.warn("search nearby failed for {},{}: {}", lat, lng, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 步行路线信息（距离米 + 时长秒），失败返回 null。
+     */
+    public Map<String, Integer> routeInfo(double fromLat, double fromLng, double toLat, double toLng) {
+        String url = "https://apis.map.qq.com/ws/direction/v1/walking/?from={from}&to={to}&key={key}";
+        try {
+            String json = restClient.get()
+                    .uri(url, fromLat + "," + fromLng, toLat + "," + toLng, mapKey)
+                    .retrieve()
+                    .body(String.class);
+            JsonNode root = jsonMapper.readTree(json);
+            int status = root.path("status").asInt(-1);
+            if (status != 0) {
+                log.warn("[map] 路线规划失败，status={}, message={}", status, root.path("message").asText());
+                return null;
+            }
+            JsonNode route = root.path("result").path("routes").get(0);
+            Map<String, Integer> info = new HashMap<>();
+            info.put("distance", route.path("distance").asInt());
+            info.put("duration", route.path("duration").asInt());
+            return info;
+        } catch (Exception e) {
+            log.warn("[map] 路线规划失败: {}", e.getMessage());
             return null;
         }
     }
