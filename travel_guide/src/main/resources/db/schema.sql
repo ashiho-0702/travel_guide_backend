@@ -84,3 +84,15 @@ CREATE TABLE IF NOT EXISTS packing_item (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_trip (trip_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+-- 开支记录：每个行程一份，分类记账（住宿/交通/餐饮/临时支出）
+CREATE TABLE IF NOT EXISTS expense (
+    id           BIGINT AUTO_INCREMENT PRIMARY KEY,
+    trip_id      BIGINT NOT NULL,
+    category     VARCHAR(16) NOT NULL,
+    amount       DECIMAL(10,2) NOT NULL,
+    note         VARCHAR(255),
+    expense_date DATE,
+    created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_trip (trip_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
