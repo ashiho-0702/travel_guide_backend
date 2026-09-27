@@ -4,16 +4,20 @@ import com.study.travel_guide.common.Result;
 import com.study.travel_guide.dto.AddSpotRequest;
 import com.study.travel_guide.dto.DeleteSpotRequest;
 import com.study.travel_guide.dto.EditSpotRequest;
+import com.study.travel_guide.dto.ExpenseRequest;
 import com.study.travel_guide.dto.GenerateRequest;
 import com.study.travel_guide.dto.MoveSpotRequest;
 import com.study.travel_guide.dto.PackingItemRequest;
 import com.study.travel_guide.dto.ReplanRequest;
 import com.study.travel_guide.dto.TripSummary;
 import com.study.travel_guide.dto.UpdateResultRequest;
+import com.study.travel_guide.entity.Expense;
 import com.study.travel_guide.entity.PackingItem;
 import com.study.travel_guide.entity.Trip;
+import com.study.travel_guide.service.ExpenseService;
 import com.study.travel_guide.service.PackingService;
 import com.study.travel_guide.service.TripPdfService;
+import com.study.travel_guide.service.WeatherService;
 import com.study.travel_guide.service.TripReplanService;
 import com.study.travel_guide.service.TripService;
 import com.study.travel_guide.service.wechat.QrCodeService;
@@ -54,6 +58,8 @@ public class TripController {
     private final TripPdfService tripPdfService;
     private final TripReplanService tripReplanService;
     private final PackingService packingService;
+    private final WeatherService weatherService;
+    private final ExpenseService expenseService;
 
     public TripController(TripService tripService,
                           TripWorkflowService tripWorkflowService,
@@ -62,7 +68,9 @@ public class TripController {
                           JsonMapper jsonMapper,
                           TripPdfService tripPdfService,
                           TripReplanService tripReplanService,
-                          PackingService packingService) {
+                          PackingService packingService,
+                          WeatherService weatherService,
+                          ExpenseService expenseService) {
         this.tripService = tripService;
         this.tripWorkflowService = tripWorkflowService;
         this.qrCodeService = qrCodeService;
@@ -71,6 +79,8 @@ public class TripController {
         this.tripPdfService = tripPdfService;
         this.tripReplanService = tripReplanService;
         this.packingService = packingService;
+        this.weatherService = weatherService;
+        this.expenseService = expenseService;
     }
 
     @PostMapping("/generate")
@@ -298,6 +308,51 @@ public class TripController {
                                       @PathVariable Long id,
                                       @PathVariable Long itemId) {
         packingService.delete(userId, id, itemId);
+        return Result.ok();
+    }
+
+    @GetMapping("/{id}/weather")
+    public Result<Map<String, Object>> weather(@RequestAttribute("userId") Long userId,
+                                               @PathVariable Long id) {
+        Trip trip = tripService.detailAsMember(userId, id);
+        return Result.ok(weatherService.weather(trip.getCity()));
+    }
+
+    @GetMapping("/{id}/expenses")
+    public Result<List<Expense>> expenseList(@RequestAttribute("userId") Long userId,
+                                             @PathVariable Long id) {
+        return Result.ok(expenseService.list(userId, id));
+    }
+
+    @GetMapping("/{id}/expenses/summary")
+    public Result<Map<String, Object>> expenseSummary(@RequestAttribute("userId") Long userId,
+                                                      @PathVariable Long id) {
+        return Result.ok(expenseService.summary(userId, id));
+    }
+
+    @PostMapping("/{id}/expenses")
+    public Result<List<Expense>> expenseAdd(@RequestAttribute("userId") Long userId,
+                                            @PathVariable Long id,
+                                            @RequestBody ExpenseRequest request) {
+        return Result.ok(expenseService.add(userId, id, request.getCategory(), request.getAmount(),
+                request.getNote(), request.getExpenseDate()));
+    }
+
+    @PutMapping("/{id}/expenses/{expenseId}")
+    public Result<Void> expenseUpdate(@RequestAttribute("userId") Long userId,
+                                      @PathVariable Long id,
+                                      @PathVariable Long expenseId,
+                                      @RequestBody ExpenseRequest request) {
+        expenseService.update(userId, id, expenseId, request.getCategory(), request.getAmount(),
+                request.getNote(), request.getExpenseDate());
+        return Result.ok();
+    }
+
+    @DeleteMapping("/{id}/expenses/{expenseId}")
+    public Result<Void> expenseDelete(@RequestAttribute("userId") Long userId,
+                                      @PathVariable Long id,
+                                      @PathVariable Long expenseId) {
+        expenseService.delete(userId, id, expenseId);
         return Result.ok();
     }
 }

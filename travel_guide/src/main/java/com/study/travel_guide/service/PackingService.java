@@ -65,6 +65,7 @@ public class PackingService {
             throw new BizException(400, "物品名不能为空");
         }
         packingItemMapper.insert(tripId, name.trim(), false);
+        log.info("[packing] 新增物品: tripId={}, name={}", tripId, name.trim());
         return packingItemMapper.listByTrip(tripId);
     }
 
@@ -77,11 +78,13 @@ public class PackingService {
         if (affected == 0) {
             throw new BizException(404, "物品不存在");
         }
+        log.info("[packing] 更新物品: tripId={}, itemId={}", tripId, itemId);
     }
 
     public void delete(Long userId, Long tripId, Long itemId) {
         tripService.detailAsMember(userId, tripId);
         packingItemMapper.delete(itemId, tripId);
+        log.info("[packing] 删除物品: tripId={}, itemId={}", tripId, itemId);
     }
 
     private String buildPrompt(Trip trip) {
