@@ -562,6 +562,9 @@ public class TripWorkflowService {
         if (req.getExtraRequirements() != null && !req.getExtraRequirements().isBlank()) {
             sb.append("- 其他需求：").append(req.getExtraRequirements()).append('\n');
         }
+        if (req.getSelectedAttractions() != null && !req.getSelectedAttractions().isEmpty()) {
+            sb.append("- 用户勾选想去的景点（务必安排）：").append(String.join("、", req.getSelectedAttractions())).append('\n');
+        }
         if (memory != null && !memory.isBlank()) {
             sb.append('\n').append(memory).append('\n');
         }
@@ -588,6 +591,9 @@ public class TripWorkflowService {
         sb.append("- 主要交通方式：").append(joinTransportationLabels(req.getTransportation())).append('\n');
         if (req.getExtraRequirements() != null && !req.getExtraRequirements().isBlank()) {
             sb.append("- 其他需求：").append(req.getExtraRequirements()).append('\n');
+        }
+        if (req.getSelectedAttractions() != null && !req.getSelectedAttractions().isEmpty()) {
+            sb.append("- 用户勾选想去的景点（务必安排）：").append(String.join("、", req.getSelectedAttractions())).append('\n');
         }
         if (memory != null && !memory.isBlank()) {
             sb.append('\n').append(memory).append('\n');

@@ -15,4 +15,5 @@ public class GenerateRequest {
     private String energyLevel;
     private List<String> transportation;
     private String extraRequirements;
+    private List<String> selectedAttractions;
 }
