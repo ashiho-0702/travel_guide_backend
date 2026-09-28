@@ -106,7 +106,7 @@ public class TripWorkflowService {
     private final PointService pointService;
     private final ExecutorService taskExecutor;
 
-    @Value("${workflow.reflect:false}")
+    @Value("${workflow.reflect:true}")
     private boolean reflectEnabled;
 
     public TripWorkflowService(RetrievalService retrievalService,
@@ -361,12 +361,65 @@ public class TripWorkflowService {
                 + "\n\n请检查路线是否顺路、预算是否合理、景点强度是否匹配体力档位。若有明显问题，输出改进后的完整 JSON；若无需改进，原样输出该 JSON。只输出 JSON。";
         try {
             JsonNode refined = deepSeekService.generateJson(REFLECT_SYSTEM_PROMPT, userPrompt);
-            log.info("[reflect] 反思校验完成，耗时 {}ms", System.currentTimeMillis() - t);
+            log.info("[reflect] 反思校验完成，耗时 {}ms，改动：{}", System.currentTimeMillis() - t, diffGuide(guide, refined));
             return refined;
         } catch (Exception e) {
             log.warn("reflect failed, keep original: {}", e.getMessage());
             return guide;
         }
+    }
+
+    private String diffGuide(JsonNode before, JsonNode after) {
+        List<String> changes = new ArrayList<>();
+        if (!before.path("overview").asText().equals(after.path("overview").asText())) {
+            changes.add("概览已修改");
+        }
+        int costBefore = before.path("estimatedTotalCost").asInt(-1);
+        int costAfter = after.path("estimatedTotalCost").asInt(-1);
+        if (costBefore != costAfter) {
+            changes.add("总费用 " + costBefore + "→" + costAfter);
+        }
+        JsonNode daysBefore = before.path("days");
+        JsonNode daysAfter = after.path("days");
+        if (daysBefore.size() != daysAfter.size()) {
+            changes.add("天数 " + daysBefore.size() + "→" + daysAfter.size());
+        }
+        int n = Math.min(daysBefore.size(), daysAfter.size());
+        for (int i = 0; i < n; i++) {
+            List<String> b = spotNames(daysBefore.get(i));
+            List<String> a = spotNames(daysAfter.get(i));
+            if (b.equals(a)) {
+                continue;
+            }
+            List<String> removed = new ArrayList<>(b);
+            removed.removeAll(a);
+            List<String> added = new ArrayList<>(a);
+            added.removeAll(b);
+            if (!removed.isEmpty() && !added.isEmpty()) {
+                changes.add("第" + (i + 1) + "天 景点替换 " + removed + "→" + added);
+            } else if (!removed.isEmpty()) {
+                changes.add("第" + (i + 1) + "天 删除景点 " + removed);
+            } else if (!added.isEmpty()) {
+                changes.add("第" + (i + 1) + "天 新增景点 " + added);
+            } else {
+                changes.add("第" + (i + 1) + "天 景点顺序调整");
+            }
+        }
+        return changes.isEmpty() ? "无变化" : String.join("；", changes);
+    }
+
+    private List<String> spotNames(JsonNode day) {
+        List<String> names = new ArrayList<>();
+        JsonNode spots = day.path("spots");
+        if (spots.isArray()) {
+            for (JsonNode s : spots) {
+                String name = s.path("name").asText();
+                if (!name.isBlank()) {
+                    names.add(name);
+                }
+            }
+        }
+        return names;
     }
 
     private void fillCoordinates(JsonNode guide, String city) {
@@ -459,7 +512,9 @@ public class TripWorkflowService {
                 ObjectNode candidate = withCoord.get(j);
                 double lat = candidate.get("lat").asDouble();
                 double lng = candidate.get("lng").asDouble();
-                double dist = (lat - curLat) * (lat - curLat) + (lng - curLng) * (lng - curLng);
+                double dlat = lat - curLat;
+                double dlng = (lng - curLng) * Math.cos(Math.toRadians((lat + curLat) / 2));
+                double dist = dlat * dlat + dlng * dlng;
                 if (dist < minDist) {
                     minDist = dist;
                     nearest = j;

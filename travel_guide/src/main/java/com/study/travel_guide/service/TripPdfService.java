@@ -141,6 +141,7 @@ public class TripPdfService {
             PdfRendererBuilder builder = new PdfRendererBuilder();
             File font = findFont();
             if (font != null) {
+                log.info("[pdf] 使用字体: {}", font.getAbsolutePath());
                 builder.useFont(font, "SimHei");
             }
             builder.withHtmlContent(html, null);
@@ -161,10 +162,18 @@ public class TripPdfService {
             }
         }
         String[] candidates = {
+                // 中文字体优先（含中文 glyph），Windows 开发机
                 "C:/Windows/Fonts/simhei.ttf",
                 "C:/Windows/Fonts/msyh.ttf",
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
+                // Linux 中文字体（生产环境），按常见发行版路径
+                "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+                "/usr/share/fonts/opentype/noto/NotoSansCJK.ttc",
+                "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+                "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+                "/usr/share/fonts/wqy-microhei/wqy-microhei.ttc",
+                "/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc",
+                // 兜底：无中文 glyph，仅保证非中文场景可用
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
         };
         for (String c : candidates) {
             File f = new File(c);

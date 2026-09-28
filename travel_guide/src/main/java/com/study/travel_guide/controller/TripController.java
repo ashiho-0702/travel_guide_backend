@@ -141,10 +141,12 @@ public class TripController {
     public void exportPdf(@RequestAttribute("userId") Long userId,
                           @PathVariable Long id,
                           HttpServletResponse response) throws IOException {
+        log.info("[pdf] 导出请求: userId={}, tripId={}", userId, id);
         byte[] pdf = tripPdfService.exportPdf(userId, id);
         response.setContentType("application/pdf");
         response.setHeader("Content-Disposition", "inline; filename=\"trip-" + id + ".pdf\"");
         response.getOutputStream().write(pdf);
+        log.info("[pdf] 导出成功: tripId={}, 大小={}B", id, pdf.length);
     }
 
     @GetMapping("/{id}/qrcode")

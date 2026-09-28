@@ -36,7 +36,10 @@ public class RouteService {
         // 最近邻排序
         List<RoutePoint> ordered = new ArrayList<>();
         boolean hasOrigin = origin != null && origin.getLat() != null && origin.getLng() != null;
-        log.info("[route] 优化路线: {} 个点, 有起点={}", points.size(), hasOrigin);
+        log.info("[route] 优化路线: {} 个点, 有起点={}, origin=({},{}), 第一个景点=({},{})",
+                points.size(), hasOrigin,
+                origin == null ? null : origin.getLat(), origin == null ? null : origin.getLng(),
+                points.get(0).getLat(), points.get(0).getLng());
         double curLat = hasOrigin ? origin.getLat() : points.get(0).getLat();
         double curLng = hasOrigin ? origin.getLng() : points.get(0).getLng();
         boolean[] visited = new boolean[points.size()];
@@ -110,7 +113,7 @@ public class RouteService {
 
     private double sqDist(double lat1, double lng1, RoutePoint p) {
         double dlat = lat1 - p.getLat();
-        double dlng = lng1 - p.getLng();
+        double dlng = (lng1 - p.getLng()) * Math.cos(Math.toRadians((lat1 + p.getLat()) / 2));
         return dlat * dlat + dlng * dlng;
     }
 }

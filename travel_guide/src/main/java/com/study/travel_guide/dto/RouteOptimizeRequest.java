@@ -6,6 +6,5 @@ import java.util.List;
 
 @Data
 public class RouteOptimizeRequest {
-    private RoutePoint origin;
     private List<RoutePoint> points;
 }

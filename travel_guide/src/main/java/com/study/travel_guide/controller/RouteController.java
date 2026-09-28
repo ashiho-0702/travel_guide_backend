@@ -26,6 +26,6 @@ public class RouteController {
     public Result<Map<String, Object>> optimize(@RequestBody RouteOptimizeRequest request) {
         int pointCount = request.getPoints() == null ? 0 : request.getPoints().size();
         log.info("[route] 收到优化请求: {} 个点", pointCount);
-        return Result.ok(routeService.optimize(request.getOrigin(), request.getPoints()));
+        return Result.ok(routeService.optimize(null, request.getPoints()));
     }
 }
