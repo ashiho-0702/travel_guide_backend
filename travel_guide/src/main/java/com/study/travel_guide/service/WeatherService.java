@@ -4,6 +4,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -11,6 +12,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,6 +30,7 @@ public class WeatherService {
 
     private final RestClient restClient;
     private final JsonMapper jsonMapper;
+    private final StringRedisTemplate redisTemplate;
 
     @Value("${weather.api-key:}")
     private String apiKey;
@@ -35,9 +38,10 @@ public class WeatherService {
     @Value("${weather.api-host:}")
     private String apiHost;
 
-    public WeatherService(RestClient restClient, JsonMapper jsonMapper) {
+    public WeatherService(RestClient restClient, JsonMapper jsonMapper, StringRedisTemplate redisTemplate) {
         this.restClient = restClient;
         this.jsonMapper = jsonMapper;
+        this.redisTemplate = redisTemplate;
     }
 
     /**
@@ -67,9 +71,25 @@ public class WeatherService {
     }
 
     /**
-     * 返回城市当前天气 + 未来 3 天预报（结构化），供前端展示。失败时返回部分字段（至少含 city）。
+     * 返回城市当前天气 + 未来 3 天预报（结构化），供前端展示。结果按城市缓存 30 分钟。
      */
     public Map<String, Object> weather(String city) {
+        String cacheKey = "weather:" + city;
+        String cached = null;
+        try {
+            cached = redisTemplate.opsForValue().get(cacheKey);
+        } catch (Exception ignored) {
+        }
+        if (cached != null) {
+            try {
+                JsonNode node = jsonMapper.readTree(cached);
+                @SuppressWarnings("unchecked")
+                Map<String, Object> result = (Map<String, Object>) jsonMapper.convertValue(node, Map.class);
+                return result;
+            } catch (Exception ignored) {
+            }
+        }
+
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("city", city);
         String locationId = resolveLocationId(city);
@@ -102,6 +122,15 @@ public class WeatherService {
             }
             if (!forecast.isEmpty()) {
                 result.put("forecast", forecast);
+            }
+        }
+
+        // 只有真正拿到天气数据（now 或 forecast）才缓存，避免缓存降级结果
+        if (result.containsKey("now") || result.containsKey("forecast")) {
+            try {
+                redisTemplate.opsForValue().set(cacheKey, jsonMapper.writeValueAsString(result), Duration.ofMinutes(30));
+            } catch (Exception e) {
+                log.warn("[weather] 缓存失败: {}", e.getMessage());
             }
         }
         return result;

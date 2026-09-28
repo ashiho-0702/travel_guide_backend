@@ -4,9 +4,11 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -16,19 +18,34 @@ public class TencentMapService {
 
     private final RestClient restClient;
     private final JsonMapper jsonMapper;
+    private final StringRedisTemplate redisTemplate;
 
     @Value("${tencent.map-key}")
     private String mapKey;
 
-    public TencentMapService(RestClient restClient, JsonMapper jsonMapper) {
+    public TencentMapService(RestClient restClient, JsonMapper jsonMapper, StringRedisTemplate redisTemplate) {
         this.restClient = restClient;
         this.jsonMapper = jsonMapper;
+        this.redisTemplate = redisTemplate;
     }
 
     /**
-     * 地点搜索，返回 [lat, lng]，失败返回 null。
+     * 地点搜索，返回 [lat, lng]，失败返回 null。结果按「城市+关键词」缓存 30 天。
      */
     public double[] searchLocation(String keyword, String city) {
+        String cacheKey = "geo:" + city + ":" + keyword;
+        String cached = null;
+        try {
+            cached = redisTemplate.opsForValue().get(cacheKey);
+        } catch (Exception ignored) {
+        }
+        if (cached != null) {
+            try {
+                String[] parts = cached.split(",");
+                return new double[]{Double.parseDouble(parts[0]), Double.parseDouble(parts[1])};
+            } catch (Exception ignored) {
+            }
+        }
         String url = "https://apis.map.qq.com/ws/place/v1/search" +
                 "?keyword={kw}&boundary=region({city},0)&key={key}";
         try {
@@ -47,7 +64,9 @@ public class TencentMapService {
                 return null;
             }
             JsonNode location = first.path("location");
-            return new double[]{location.path("lat").asDouble(), location.path("lng").asDouble()};
+            double[] result = new double[]{location.path("lat").asDouble(), location.path("lng").asDouble()};
+            cache(cacheKey, result[0] + "," + result[1], Duration.ofDays(30));
+            return result;
         } catch (Exception e) {
             log.warn("geocode failed for {}: {}", keyword, e.getMessage());
             return null;
@@ -87,9 +106,25 @@ public class TencentMapService {
     }
 
     /**
-     * 步行路线信息（距离米 + 时长秒），失败返回 null。
+     * 步行路线信息（距离米 + 时长秒），失败返回 null。结果按坐标缓存 30 天。
      */
     public Map<String, Integer> routeInfo(double fromLat, double fromLng, double toLat, double toLng) {
+        String cacheKey = "route:" + round(fromLat) + "," + round(fromLng) + ":" + round(toLat) + "," + round(toLng);
+        String cached = null;
+        try {
+            cached = redisTemplate.opsForValue().get(cacheKey);
+        } catch (Exception ignored) {
+        }
+        if (cached != null) {
+            try {
+                String[] parts = cached.split(",");
+                Map<String, Integer> info = new HashMap<>();
+                info.put("distance", Integer.parseInt(parts[0]));
+                info.put("duration", Integer.parseInt(parts[1]));
+                return info;
+            } catch (Exception ignored) {
+            }
+        }
         String url = "https://apis.map.qq.com/ws/direction/v1/walking/?from={from}&to={to}&key={key}";
         try {
             String json = restClient.get()
@@ -106,10 +141,23 @@ public class TencentMapService {
             Map<String, Integer> info = new HashMap<>();
             info.put("distance", route.path("distance").asInt());
             info.put("duration", route.path("duration").asInt());
+            cache(cacheKey, info.get("distance") + "," + info.get("duration"), Duration.ofDays(30));
             return info;
         } catch (Exception e) {
             log.warn("[map] 路线规划失败: {}", e.getMessage());
             return null;
+        }
+    }
+
+    private String round(double v) {
+        return String.format("%.4f", v);
+    }
+
+    private void cache(String key, String value, Duration ttl) {
+        try {
+            redisTemplate.opsForValue().set(key, value, ttl);
+        } catch (Exception e) {
+            log.warn("[cache] 缓存写入失败: {}", e.getMessage());
         }
     }
 }
