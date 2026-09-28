@@ -23,8 +23,9 @@ class TripServiceTest {
     private final TripCollaboratorMapper collaboratorMapper = mock(TripCollaboratorMapper.class);
     private final UserMapper userMapper = mock(UserMapper.class);
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
+    private final RouteService routeService = mock(RouteService.class);
 
-    private final TripService service = new TripService(tripMapper, jsonMapper, collaboratorMapper, userMapper);
+    private final TripService service = new TripService(tripMapper, jsonMapper, collaboratorMapper, userMapper, routeService);
 
     private Trip trip(long id, long ownerId) {
         Trip t = new Trip();

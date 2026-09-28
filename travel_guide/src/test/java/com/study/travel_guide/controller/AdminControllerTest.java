@@ -6,11 +6,13 @@ import com.study.travel_guide.entity.User;
 import com.study.travel_guide.mapper.PointFlowMapper;
 import com.study.travel_guide.mapper.TripMapper;
 import com.study.travel_guide.mapper.UserMapper;
+import com.study.travel_guide.service.PopularAttractionService;
 import com.study.travel_guide.service.guide.SeedAttractionService;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -25,9 +27,12 @@ class AdminControllerTest {
     private final TripMapper tripMapper = mock(TripMapper.class);
     private final PointFlowMapper pointFlowMapper = mock(PointFlowMapper.class);
     private final SeedAttractionService seedAttractionService = mock(SeedAttractionService.class);
+    private final PopularAttractionService popularAttractionService = mock(PopularAttractionService.class);
+    private final ExecutorService taskExecutor = mock(ExecutorService.class);
 
     private final AdminController controller =
-            new AdminController(seedAttractionService, userMapper, tripMapper, pointFlowMapper);
+            new AdminController(seedAttractionService, userMapper, tripMapper, pointFlowMapper,
+                    popularAttractionService, taskExecutor);
 
     private User user(boolean admin) {
         User u = new User();
