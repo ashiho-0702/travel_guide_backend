@@ -20,6 +20,8 @@ Thumbs.db
 
 # === 本地配置（含真实密钥，勿提交；模板见 application.yml.example）===
 **/application.yml
+**/application-dev.yml
+**/application-prod.yml
 
 # === Claude Code 本地配置 ===
 .claude/

@@ -106,7 +106,7 @@ public class TripWorkflowService {
     private final PointService pointService;
     private final ExecutorService taskExecutor;
 
-    @Value("${workflow.reflect:true}")
+    @Value("${workflow.reflect:false}")
     private boolean reflectEnabled;
 
     public TripWorkflowService(RetrievalService retrievalService,
