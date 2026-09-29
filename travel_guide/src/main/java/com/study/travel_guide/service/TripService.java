@@ -90,6 +90,16 @@ public class TripService {
         tripCollaboratorMapper.delete(tripId, targetUserId);
     }
 
+    public void leave(Long userId, Long tripId) {
+        Trip trip = detailAsMember(userId, tripId);
+        if (trip.getUserId().equals(userId)) {
+            throw new BizException(400, "创建者不能退出协作，请删除行程");
+        }
+        if (tripCollaboratorMapper.delete(tripId, userId) == 0) {
+            throw new BizException(400, "你不是该行程的协作者");
+        }
+    }
+
     private Map<String, Object> member(Long userId, String nickname, String avatarUrl, boolean isOwner) {
         Map<String, Object> m = new HashMap<>();
         m.put("userId", userId);

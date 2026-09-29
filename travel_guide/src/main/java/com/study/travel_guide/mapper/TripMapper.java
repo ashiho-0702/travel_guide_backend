@@ -28,7 +28,8 @@ public interface TripMapper {
             "OR EXISTS (SELECT 1 FROM trip_collaborator c WHERE c.trip_id = t.id AND c.user_id = #{userId}))")
     Trip findByIdAndMember(@Param("id") Long id, @Param("userId") Long userId);
 
-    @Select("<script>SELECT id, city, days, start_date, CONCAT(city, ' ', days, '天') AS title, is_favorite, created_at " +
+    @Select("<script>SELECT id, city, days, start_date, CONCAT(city, ' ', days, '天') AS title, is_favorite, created_at, " +
+            "(t.user_id = #{userId}) AS is_owner " +
             "FROM trip t " +
             "<choose>" +
             "<when test='favorite != null'>WHERE t.user_id = #{userId} AND is_favorite = #{favorite} </when>" +

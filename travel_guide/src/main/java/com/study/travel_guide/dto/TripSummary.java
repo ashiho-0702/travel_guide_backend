@@ -12,5 +12,6 @@ public class TripSummary {
     private Integer days;
     private String startDate;
     private Boolean isFavorite;
+    private Boolean isOwner;
     private LocalDateTime createdAt;
 }

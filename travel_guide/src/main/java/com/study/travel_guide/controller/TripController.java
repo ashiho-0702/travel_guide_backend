@@ -210,6 +210,13 @@ public class TripController {
         return Result.ok();
     }
 
+    @DeleteMapping("/{id}/collaborator/me")
+    public Result<Void> leaveCollaborator(@RequestAttribute("userId") Long userId,
+                                          @PathVariable Long id) {
+        tripService.leave(userId, id);
+        return Result.ok();
+    }
+
     @PostMapping("/{id}/favorite")
     public Result<Void> favorite(@RequestAttribute("userId") Long userId,
                                  @PathVariable Long id) {
