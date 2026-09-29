@@ -87,6 +87,12 @@ public class PackingService {
         log.info("[packing] 删除物品: tripId={}, itemId={}", tripId, itemId);
     }
 
+    public void clearChecked(Long userId, Long tripId) {
+        tripService.detailAsMember(userId, tripId);
+        packingItemMapper.clearChecked(tripId);
+        log.info("[packing] 一键清除勾选: tripId={}", tripId);
+    }
+
     private String buildPrompt(Trip trip) {
         StringBuilder sb = new StringBuilder();
         sb.append("目的地：").append(trip.getCity()).append('\n');

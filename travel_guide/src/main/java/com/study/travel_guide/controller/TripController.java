@@ -322,6 +322,13 @@ public class TripController {
         return Result.ok();
     }
 
+    @PutMapping("/{id}/packing/check/reset")
+    public Result<Void> packingResetCheck(@RequestAttribute("userId") Long userId,
+                                          @PathVariable Long id) {
+        packingService.clearChecked(userId, id);
+        return Result.ok();
+    }
+
     @GetMapping("/{id}/weather")
     public Result<Map<String, Object>> weather(@RequestAttribute("userId") Long userId,
                                                @PathVariable Long id) {

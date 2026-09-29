@@ -27,4 +27,7 @@ public interface PackingItemMapper {
 
     @Delete("DELETE FROM packing_item WHERE trip_id = #{tripId}")
     int deleteByTrip(@Param("tripId") Long tripId);
+
+    @Update("UPDATE packing_item SET checked = 0 WHERE trip_id = #{tripId}")
+    int clearChecked(@Param("tripId") Long tripId);
 }
