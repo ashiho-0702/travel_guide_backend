@@ -165,9 +165,8 @@ public class TripPdfService {
                 // 中文字体优先（含中文 glyph），Windows 开发机
                 "C:/Windows/Fonts/simhei.ttf",
                 "C:/Windows/Fonts/msyh.ttf",
-                // Linux 中文字体（生产环境），按常见发行版路径
-                "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-                "/usr/share/fonts/opentype/noto/NotoSansCJK.ttc",
+                // Linux 中文字体（生产环境）：wqy 是 TrueType 轮廓，pdfbox 可正常子集化
+                // 注意：Noto CJK 是 OTF/CFF 轮廓（无 glyf 表），pdfbox 子集化会报错，不能采用
                 "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
                 "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
                 "/usr/share/fonts/wqy-microhei/wqy-microhei.ttc",
