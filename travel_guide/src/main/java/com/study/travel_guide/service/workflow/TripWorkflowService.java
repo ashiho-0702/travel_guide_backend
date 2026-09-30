@@ -21,7 +21,6 @@ import com.study.travel_guide.service.growth.GrowthRule;
 import com.study.travel_guide.service.growth.PointService;
 import com.study.travel_guide.service.rag.RetrievedDoc;
 import com.study.travel_guide.service.wechat.ContentSecurityService;
-import com.study.travel_guide.service.wechat.SubscribeMessageService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -103,7 +102,6 @@ public class TripWorkflowService {
     private final UserMemoryService userMemoryService;
     private final TripMapper tripMapper;
     private final UserMapper userMapper;
-    private final SubscribeMessageService subscribeMessageService;
     private final ContentSecurityService contentSecurityService;
     private final PointService pointService;
     private final ExecutorService taskExecutor;
@@ -120,7 +118,6 @@ public class TripWorkflowService {
                                UserMemoryService userMemoryService,
                                TripMapper tripMapper,
                                UserMapper userMapper,
-                               SubscribeMessageService subscribeMessageService,
                                ContentSecurityService contentSecurityService,
                                PointService pointService,
                                ExecutorService taskExecutor) {
@@ -133,7 +130,6 @@ public class TripWorkflowService {
         this.userMemoryService = userMemoryService;
         this.tripMapper = tripMapper;
         this.userMapper = userMapper;
-        this.subscribeMessageService = subscribeMessageService;
         this.contentSecurityService = contentSecurityService;
         this.pointService = pointService;
         this.taskExecutor = taskExecutor;
@@ -179,25 +175,12 @@ public class TripWorkflowService {
         awardTripPoints(userId);
         log.info("[workflow] 7/7 持久化 + RAG 摄入 完成，耗时 {}ms", System.currentTimeMillis() - t);
 
-        taskExecutor.execute(() -> sendSubscribeMessage(userId, req, trip));
-
         log.info("[workflow] 全部完成，总耗时 {}ms, tripId={}", System.currentTimeMillis() - total, trip.getId());
 
         Map<String, Object> data = new HashMap<>();
         data.put("tripId", trip.getId());
         data.put("result", guide);
         return data;
-    }
-
-    private void sendSubscribeMessage(Long userId, GenerateRequest req, Trip trip) {
-        try {
-            User user = userMapper.findById(userId);
-            if (user != null && user.getOpenid() != null && !user.getOpenid().isBlank()) {
-                subscribeMessageService.sendGenerateDone(user.getOpenid(), req.getCity(), req.getDays(), trip.getId());
-            }
-        } catch (Exception e) {
-            log.warn("订阅消息发送失败: {}", e.getMessage());
-        }
     }
 
     private void awardTripPoints(Long userId) {

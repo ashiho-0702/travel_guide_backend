@@ -61,6 +61,9 @@ public interface TripMapper {
     @Select("SELECT * FROM trip WHERE share_token = #{token}")
     Trip findByShareToken(@Param("token") String token);
 
+    @Select("SELECT * FROM trip WHERE start_date = #{date}")
+    List<Trip> findByStartDate(@Param("date") String date);
+
     @Select("SELECT COUNT(*) FROM trip WHERE user_id = #{userId}")
     int countByUser(@Param("userId") Long userId);
 

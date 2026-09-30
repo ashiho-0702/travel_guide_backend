@@ -29,17 +29,17 @@ public class SubscribeMessageService {
         this.accessTokenService = accessTokenService;
     }
 
-    public void sendGenerateDone(String openid, String city, Integer days, Long tripId) {
+    public void sendTripStartReminder(String openid, String city, Integer days, Long tripId) {
         if (templateId == null || templateId.isBlank()) {
             log.warn("订阅消息模板 ID 未配置，跳过发送");
             return;
         }
         // 模板字段：行程名称=thing26、行程日期=date14、行程路线=thing20、备注=thing21
         Map<String, Object> data = new HashMap<>();
-        data.put("thing26", Map.of("value", city + " " + days + "天攻略"));    // 行程名称
-        data.put("date14", Map.of("value", LocalDate.now().toString()));       // 行程日期
-        data.put("thing20", Map.of("value", "已生成每日行程和景点美食推荐"));   // 行程路线
-        data.put("thing21", Map.of("value", "点击查看攻略详情"));               // 备注
+        data.put("thing26", Map.of("value", city + " " + days + "天旅行今天开始"));  // 行程名称
+        data.put("date14", Map.of("value", LocalDate.now().toString()));              // 行程日期
+        data.put("thing20", Map.of("value", "每日行程已排好，点击查看"));              // 行程路线
+        data.put("thing21", Map.of("value", "点击查看攻略详情"));                     // 备注
 
         send(openid, data, "pages/result/result?tripId=" + tripId);
     }
