@@ -57,7 +57,7 @@ public class ConversationService {
 
     public Map<String, Object> chat(Long userId, String sessionId, String question, String attraction) {
         if (question != null && !question.isBlank()) {
-            contentSecurityService.checkText(userId, question, ContentSecurityService.SCENE_COMMENT);
+            contentSecurityService.checkText(userId, question, ContentSecurityService.SCENE_CHAT);
         }
         if (sessionId == null || sessionId.isBlank()) {
             sessionId = UUID.randomUUID().toString();
