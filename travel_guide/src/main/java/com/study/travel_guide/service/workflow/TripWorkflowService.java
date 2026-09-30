@@ -49,9 +49,9 @@ public class TripWorkflowService {
             - geocode：查询景点经纬度
 
             重要规则：
-            1. 用 1-2 轮搜索获取关键信息（景点、美食、避坑、交通）即可，不要反复搜索同类信息。
+            1. 用 1-2 轮搜索获取关键信息（景点、美食、避坑、交通、门票预约/开放时间/客流/游玩时长）即可，不要反复搜索同类信息。
             2. 信息足够后立即停止调用工具，直接输出「行程素材汇总」文本。
-            3. 「行程素材汇总」应包含：推荐景点、美食、注意事项、通勤建议，并标注信息来源（平台名）。
+            3. 「行程素材汇总」应包含：推荐景点、美食、注意事项、通勤建议、以及各景点的实用信息（门票预约方式、开放/进园时间、客流高峰与人少时段、快捷入口、必带物品、建议游玩时长），并标注信息来源（平台名）。搜不到的实用信息可跳过，不要编造。
             """;
 
     private static final String GUIDE_SYSTEM_PROMPT = """
@@ -68,7 +68,7 @@ public class TripWorkflowService {
                   "title": "当天主题标题",
                   "theme": "主题标签",
                   "spots": [
-                    {"name": "景点名", "reason": "推荐理由", "tip": "避坑提示", "duration": "游玩时长", "transport": "到达方式", "estimatedCostCny": 80}
+                    {"name": "景点名", "reason": "推荐理由", "tip": "避坑提示", "duration": "游玩时长", "transport": "到达方式", "estimatedCostCny": 80, "practical": {"booking": "门票预约方式", "hours": "开放/进园时间", "shortcut": "快捷入口/少排队", "crowd": "人少时段", "bring": "必带物品"}}
                   ],
                   "food": [{"name": "美食名", "reason": "推荐理由", "estimatedCostCny": 50}],
                   "note": "当天注意事项",
@@ -88,6 +88,8 @@ public class TripWorkflowService {
             6. 结合用户历史偏好和其他需求做个性化推荐。
             7. 费用字段均为整数（元）、不带单位、是全队合计（非人均）：spots[].estimatedCostCny 为景点门票费，food[].estimatedCostCny 为餐费，days[].estimatedCostCny 为当天预估总费用（= 当天所有景点+美食之和），estimatedTotalCost 为全程总费用（= 各天之和）。免费给 0，估算不出可省略该字段。
             8. 若用户需求里提供了「天气与季节」，据此调整：雨天把户外/远足景点换成室内或调整到晴天，晴天优先户外；在每天 note 里加一句天气提示；结合季节推荐应季景观（如春赏樱、秋赏红叶/银杏、冬赏冰雪/温泉）。
+            9. 每个景点输出 practical 贴心提示：booking=门票预约方式（含是否免费、预约渠道）、hours=开放/进园时间、shortcut=快捷入口或少排队路线、crowd=人少时段（避开客流高峰）、bring=必带物品。优先引用搜集到的真实信息；搜不到就基于常识简短补充；信息不确定时写「以官方公告为准」或省略该子字段，不要编造具体数字。
+            10. duration 要贴合景点实际游玩体量：大型景区/主题乐园 3-5 小时、博物馆/古镇/园林 2-3 小时、公园/街区/地标打卡 1-2 小时。不要写得太短；每天 3-5 个景点的累计时长应与体力档位匹配（一般每天 6-9 小时）。
             """;
 
     private static final String REFLECT_SYSTEM_PROMPT = "你是严格的旅行攻略评审专家。";
@@ -279,6 +281,9 @@ public class TripWorkflowService {
     private void validate(GenerateRequest req) {
         if (req.getCity() == null || req.getCity().isBlank()) {
             throw new BizException("目的地城市不能为空");
+        }
+        if (Boolean.FALSE.equals(tencentMapService.isInChina(req.getCity()))) {
+            throw new BizException("目的地仅支持中国境内城市");
         }
         if (req.getDays() == null || req.getDays() < 1 || req.getDays() > 15) {
             throw new BizException("天数需在 1-15 之间");

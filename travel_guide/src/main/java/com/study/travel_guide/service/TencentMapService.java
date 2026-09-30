@@ -78,10 +78,10 @@ public class TencentMapService {
      */
     public String searchNearby(double lat, double lng) {
         String url = "https://apis.map.qq.com/ws/place/v1/search" +
-                "?boundary=nearby({lat},{lng},3000)&key={key}";
+                "?boundary=nearby({lat},{lng},500)&filter=category={category}&key={key}";
         try {
             String json = restClient.get()
-                    .uri(url, lat, lng, mapKey)
+                    .uri(url, lat, lng, "旅游景点", mapKey)
                     .retrieve()
                     .body(String.class);
             log.info("[map] 周边搜索响应（前 400 字符）：{}",
@@ -94,7 +94,7 @@ public class TencentMapService {
             }
             JsonNode first = root.path("data").get(0);
             if (first == null || first.isMissingNode()) {
-                log.warn("[map] 周边搜索无数据（该坐标 1 公里内无 POI）");
+                log.warn("[map] 周边搜索无数据（该坐标 500 米内无景点 POI）");
                 return null;
             }
             String name = first.path("title").asText();
@@ -145,6 +145,45 @@ public class TencentMapService {
             return info;
         } catch (Exception e) {
             log.warn("[map] 路线规划失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 判断地点是否在中国境内。返回 null 表示无法判断（网络/服务异常，降级放行）。
+     */
+    public Boolean isInChina(String city) {
+        if (city == null || city.isBlank()) {
+            return false;
+        }
+        city = city.trim();
+        String cacheKey = "geo:nation:" + city;
+        String cached = null;
+        try {
+            cached = redisTemplate.opsForValue().get(cacheKey);
+        } catch (Exception ignored) {
+        }
+        if (cached != null) {
+            return "1".equals(cached);
+        }
+        String url = "https://apis.map.qq.com/ws/geocoder/v1/?address={address}&key={key}";
+        try {
+            String json = restClient.get()
+                    .uri(url, city, mapKey)
+                    .retrieve()
+                    .body(String.class);
+            JsonNode root = jsonMapper.readTree(json);
+            int status = root.path("status").asInt(-1);
+            if (status != 0) {
+                log.warn("[map] 地理编码无结果或异常（不缓存，下次重试）: city={}, status={}, message={}", city, status, root.path("message").asText());
+                return false;
+            }
+            String nation = root.path("result").path("ad_info").path("nation").asText();
+            boolean inChina = "中国".equals(nation) || "中华人民共和国".equals(nation);
+            cache(cacheKey, inChina ? "1" : "0", Duration.ofDays(30));
+            return inChina;
+        } catch (Exception e) {
+            log.warn("[map] 城市国别判断失败（降级放行）: city={}, {}", city, e.getMessage());
             return null;
         }
     }

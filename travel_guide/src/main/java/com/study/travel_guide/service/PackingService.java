@@ -1,6 +1,7 @@
 package com.study.travel_guide.service;
 
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 import com.study.travel_guide.common.BizException;
 import com.study.travel_guide.entity.PackingItem;
 import com.study.travel_guide.entity.Trip;
@@ -19,17 +20,19 @@ import java.util.List;
 public class PackingService {
 
     private static final String SYSTEM_PROMPT = "你是旅行行李打包助手。根据行程信息，列出该带的东西清单，"
-            + "覆盖证件、电子、衣物、洗漱、药品、其他。只输出 JSON：{\"items\": [\"...\", \"...\"]}。";
+            + "覆盖证件、电子、衣物、洗漱、药品、其他。若提供了景点必带物品建议，去重后纳入清单。只输出 JSON：{\"items\": [\"...\", \"...\"]}。";
 
     private final TripService tripService;
     private final PackingItemMapper packingItemMapper;
     private final DeepSeekService deepSeekService;
+    private final JsonMapper jsonMapper;
 
     public PackingService(TripService tripService, PackingItemMapper packingItemMapper,
-                          DeepSeekService deepSeekService) {
+                          DeepSeekService deepSeekService, JsonMapper jsonMapper) {
         this.tripService = tripService;
         this.packingItemMapper = packingItemMapper;
         this.deepSeekService = deepSeekService;
+        this.jsonMapper = jsonMapper;
     }
 
     public List<PackingItem> list(Long userId, Long tripId) {
@@ -103,7 +106,33 @@ public class PackingService {
         if (trip.getPeopleCount() != null) {
             sb.append("人数：").append(trip.getPeopleCount()).append("人\n");
         }
+        String bring = collectBringItems(trip.getResult());
+        if (bring != null && !bring.isBlank()) {
+            sb.append("攻略景点必带物品建议：").append(bring).append('\n');
+        }
         sb.append("请列出需要带的物品清单（10-20 项）。只输出 JSON：{\"items\": [...]}");
         return sb.toString();
+    }
+
+    private String collectBringItems(String result) {
+        if (result == null || result.isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode guide = jsonMapper.readTree(result);
+            List<String> items = new ArrayList<>();
+            for (JsonNode day : guide.path("days")) {
+                for (JsonNode spot : day.path("spots")) {
+                    String bring = spot.path("practical").path("bring").asText();
+                    if (bring != null && !bring.isBlank()) {
+                        items.add(bring.trim());
+                    }
+                }
+            }
+            return items.isEmpty() ? null : String.join("；", items);
+        } catch (Exception e) {
+            log.warn("[packing] 解析攻略必带物品失败: {}", e.getMessage());
+            return null;
+        }
     }
 }

@@ -24,7 +24,7 @@ class PackingServiceTest {
     private final PackingItemMapper packingItemMapper = mock(PackingItemMapper.class);
     private final DeepSeekService deepSeekService = mock(DeepSeekService.class);
 
-    private final PackingService service = new PackingService(tripService, packingItemMapper, deepSeekService);
+    private final PackingService service = new PackingService(tripService, packingItemMapper, deepSeekService, JSON);
 
     private Trip trip() {
         Trip t = new Trip();

@@ -8,6 +8,7 @@ import com.study.travel_guide.mapper.UserMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 import java.util.HashMap;
@@ -29,6 +30,8 @@ public class ContentSecurityService {
     private final WechatAccessTokenService accessTokenService;
     private final UserMapper userMapper;
 
+    private volatile boolean unavailable = false;
+
     public ContentSecurityService(RestClient restClient, JsonMapper jsonMapper,
                                   WechatAccessTokenService accessTokenService, UserMapper userMapper) {
         this.restClient = restClient;
@@ -38,6 +41,9 @@ public class ContentSecurityService {
     }
 
     public void checkText(Long userId, String content, int scene) {
+        if (unavailable) {
+            return;
+        }
         if (content == null || content.isBlank()) {
             return;
         }
@@ -79,6 +85,13 @@ public class ContentSecurityService {
             }
         } catch (BizException e) {
             throw e;
+        } catch (HttpClientErrorException e) {
+            if (e.getStatusCode().value() == 412) {
+                unavailable = true;
+                log.warn("内容安全接口无权限(412)，后续跳过检测");
+            } else {
+                log.warn("内容安全检测失败，放行: {}", e.getMessage());
+            }
         } catch (Exception e) {
             log.warn("内容安全检测失败，放行: {}", e.getMessage());
         }

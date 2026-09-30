@@ -11,6 +11,8 @@ import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 
 @Slf4j
 @Service
@@ -95,7 +97,7 @@ public class TripPdfService {
 
         JsonNode spots = day.path("spots");
         if (spots.isArray() && spots.size() > 0) {
-            sb.append("<table><tr><th>景点</th><th>推荐理由</th><th>游玩时长</th><th>到达方式</th><th>费用(元)</th></tr>");
+            sb.append("<table><tr><th>景点</th><th>推荐理由</th><th>游玩时长</th><th>到达方式</th><th>费用(元)</th><th>贴心提示</th></tr>");
             for (JsonNode spot : spots) {
                 sb.append("<tr>");
                 sb.append("<td>").append(esc(spot.path("name").asText())).append("</td>");
@@ -103,6 +105,7 @@ public class TripPdfService {
                 sb.append("<td>").append(esc(spot.path("duration").asText())).append("</td>");
                 sb.append("<td>").append(esc(spot.path("transport").asText())).append("</td>");
                 sb.append("<td>").append(spot.has("estimatedCostCny") ? spot.path("estimatedCostCny").asText() : "-").append("</td>");
+                sb.append("<td>").append(esc(practicalText(spot))).append("</td>");
                 sb.append("</tr>");
             }
             sb.append("</table>");
@@ -134,6 +137,27 @@ public class TripPdfService {
             return "";
         }
         return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    }
+
+    private String practicalText(JsonNode spot) {
+        JsonNode p = spot.path("practical");
+        if (p == null || p.isMissingNode() || !p.isObject()) {
+            return "-";
+        }
+        List<String> parts = new ArrayList<>();
+        appendPart(parts, "预约", p.path("booking"));
+        appendPart(parts, "时间", p.path("hours"));
+        appendPart(parts, "捷径", p.path("shortcut"));
+        appendPart(parts, "人少", p.path("crowd"));
+        appendPart(parts, "必带", p.path("bring"));
+        return parts.isEmpty() ? "-" : String.join("；", parts);
+    }
+
+    private void appendPart(List<String> parts, String label, JsonNode value) {
+        String v = value.asText();
+        if (v != null && !v.isBlank()) {
+            parts.add(label + "：" + v);
+        }
     }
 
     private byte[] htmlToPdf(String html) {
