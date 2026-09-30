@@ -14,7 +14,12 @@ public class GuideCallSession {
     public final Long userId;
     public volatile String sessionId;
     public volatile String currentAttraction;
+    public volatile Long tripId;
+    public volatile String memory;
+    public volatile Double currentLat;
+    public volatile Double currentLng;
     public volatile BaiduStreamAsrClient asrClient;
+    public final StringBuilder history = new StringBuilder();
     public final ExecutorService singleThread = Executors.newSingleThreadExecutor();
     public final AtomicLong lastFrameAt = new AtomicLong(0);
     public volatile boolean closed = false;

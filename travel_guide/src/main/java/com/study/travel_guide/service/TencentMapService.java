@@ -106,6 +106,54 @@ public class TencentMapService {
     }
 
     /**
+     * 周边搜索（分类可选），返回多个 POI 的文本列表，失败返回 null。
+     */
+    public String searchNearby(double lat, double lng, String category) {
+        boolean hasCategory = category != null && !category.isBlank();
+        String url = "https://apis.map.qq.com/ws/place/v1/search" +
+                "?boundary=nearby({lat},{lng},1000)" +
+                (hasCategory ? "&filter=category={category}" : "") +
+                "&key={key}";
+        try {
+            String json;
+            if (hasCategory) {
+                json = restClient.get().uri(url, lat, lng, category, mapKey).retrieve().body(String.class);
+            } else {
+                json = restClient.get().uri(url, lat, lng, mapKey).retrieve().body(String.class);
+            }
+            JsonNode root = jsonMapper.readTree(json);
+            int status = root.path("status").asInt(-1);
+            if (status != 0) {
+                log.warn("[map] 周边搜索失败，status={}, message={}", status, root.path("message").asText());
+                return null;
+            }
+            JsonNode data = root.path("data");
+            if (data == null || !data.isArray() || data.isEmpty()) {
+                return null;
+            }
+            StringBuilder sb = new StringBuilder();
+            int n = Math.min(data.size(), 10);
+            for (int i = 0; i < n; i++) {
+                JsonNode poi = data.get(i);
+                String title = poi.path("title").asText();
+                if (title == null || title.isBlank()) {
+                    continue;
+                }
+                sb.append(i + 1).append(". ").append(title);
+                String dist = poi.path("_distance").asText();
+                if (dist != null && !dist.isBlank()) {
+                    sb.append("（约").append(dist).append("米）");
+                }
+                sb.append('\n');
+            }
+            return sb.length() == 0 ? null : sb.toString().trim();
+        } catch (Exception e) {
+            log.warn("search nearby failed for {},{}: {}", lat, lng, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
      * 步行路线信息（距离米 + 时长秒），失败返回 null。结果按坐标缓存 30 天。
      */
     public Map<String, Integer> routeInfo(double fromLat, double fromLng, double toLat, double toLng) {

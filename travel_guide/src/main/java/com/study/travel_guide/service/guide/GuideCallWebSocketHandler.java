@@ -2,6 +2,7 @@ package com.study.travel_guide.service.guide;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import com.study.travel_guide.service.agent.AgentService;
 import com.study.travel_guide.service.qwen.QwenVlService;
 import com.study.travel_guide.service.voice.BaiduStreamAsrClient;
 import com.study.travel_guide.service.voice.BaiduVoiceService;
@@ -19,29 +20,32 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 
 /**
- * 视频通话式 AI 导游 WebSocket 端点：接收音频流（转发百度流式 ASR）+ 视频帧（qwen-vl 识图），
- * 识别到整句后调 ConversationService 生成回答 + TTS 回传。
+ * 视频通话式 AI 搭子 WebSocket 端点：接收音频流（转发百度流式 ASR）+ 视频帧（qwen-vl 识图），
+ * 识别到整句后走 Agent（搭子人设 + 攻略记忆摘要 + 附近/天气工具）生成回答并 TTS 回传。
  */
 @Slf4j
 @Component
 public class GuideCallWebSocketHandler implements WebSocketHandler {
 
     private final BaiduVoiceService baiduVoiceService;
-    private final ConversationService conversationService;
     private final QwenVlService qwenVlService;
+    private final AgentService agentService;
+    private final BuddyMemoryService buddyMemoryService;
     private final JsonMapper jsonMapper;
     private final ExecutorService guideCallExecutor;
 
     private final Map<String, GuideCallSession> sessions = new ConcurrentHashMap<>();
 
     public GuideCallWebSocketHandler(BaiduVoiceService baiduVoiceService,
-                                     ConversationService conversationService,
                                      QwenVlService qwenVlService,
+                                     AgentService agentService,
+                                     BuddyMemoryService buddyMemoryService,
                                      JsonMapper jsonMapper,
                                      @Qualifier("guideCallExecutor") ExecutorService guideCallExecutor) {
         this.baiduVoiceService = baiduVoiceService;
-        this.conversationService = conversationService;
         this.qwenVlService = qwenVlService;
+        this.agentService = agentService;
+        this.buddyMemoryService = buddyMemoryService;
         this.jsonMapper = jsonMapper;
         this.guideCallExecutor = guideCallExecutor;
     }
@@ -85,6 +89,19 @@ public class GuideCallWebSocketHandler implements WebSocketHandler {
                     if (sid != null && !sid.isBlank()) {
                         call.sessionId = sid;
                     }
+                    long tripId = msg.path("tripId").asLong();
+                    if (tripId > 0) {
+                        call.tripId = tripId;
+                        try {
+                            call.memory = buddyMemoryService.buildMemory(call.userId, tripId);
+                        } catch (Exception e) {
+                            log.warn("[guide-call] 生成搭子记忆失败: {}", e.getMessage());
+                        }
+                    }
+                    if (msg.has("lat") && msg.has("lng")) {
+                        call.currentLat = msg.path("lat").asDouble();
+                        call.currentLng = msg.path("lng").asDouble();
+                    }
                     send(session, Map.of("type", "ready", "sessionId", call.sessionId));
                 }
                 case "audio" -> {
@@ -110,7 +127,7 @@ public class GuideCallWebSocketHandler implements WebSocketHandler {
         long now = System.currentTimeMillis();
         long last = call.lastFrameAt.get();
         if (now - last < 1000) {
-            return; // 限流 1fps
+            return;
         }
         if (!call.lastFrameAt.compareAndSet(last, now)) {
             return;
@@ -126,6 +143,40 @@ public class GuideCallWebSocketHandler implements WebSocketHandler {
                 log.warn("[guide-call] 识图失败: {}", e.getMessage());
             }
         });
+    }
+
+    private String buildBuddyPrompt(GuideCallSession call) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("你是一个旅行问答助手。你能解答行程问题（今天去哪、景点介绍、门票、时长）、")
+                .append("记账问题（花了多少、分类），也能闲聊。")
+                .append("需要实时信息时调用工具：推荐附近好玩的（search_nearby）、查天气（get_weather）。")
+                .append("你只读，不修改行程或记账。回答口语化、简洁（100-200 字，适合语音播报）。\n\n");
+        if (call.currentAttraction != null && !call.currentAttraction.isBlank()) {
+            sb.append("用户当前识别的景点：").append(call.currentAttraction).append("\n");
+        }
+        if (call.currentLat != null && call.currentLng != null) {
+            sb.append("用户当前大概位置：纬度 ").append(call.currentLat)
+                    .append("，经度 ").append(call.currentLng).append("\n");
+        }
+        if (call.memory != null && !call.memory.isBlank()) {
+            sb.append("这份攻略的记忆摘要：\n").append(call.memory).append("\n");
+        }
+        if (call.history.length() > 0) {
+            sb.append("之前的对话：\n").append(call.history).append("\n");
+        }
+        return sb.toString();
+    }
+
+    private void appendHistory(GuideCallSession call, String question, String answer) {
+        synchronized (call.history) {
+            call.history.append("用户：").append(question).append("\n");
+            call.history.append("搭子：").append(answer).append("\n");
+            if (call.history.length() > 2000) {
+                String s = call.history.toString();
+                call.history.setLength(0);
+                call.history.append(s.substring(s.length() - 2000));
+            }
+        }
     }
 
     private void closeSession(WebSocketSession session) {
@@ -185,17 +236,13 @@ public class GuideCallWebSocketHandler implements WebSocketHandler {
                 return;
             }
             send(session, Map.of("type", "asr_final", "text", text));
-            // 串行队列里做 chat + tts，避免并发乱序
             call.singleThread.execute(() -> {
                 try {
-                    Map<String, Object> resp = conversationService.chat(call.userId, call.sessionId, text, call.currentAttraction);
-                    String answer = resp.get("answer") == null ? "" : resp.get("answer").toString();
-                    if (resp.get("sessionId") != null) {
-                        call.sessionId = resp.get("sessionId").toString();
-                    }
-                    if (answer.isBlank()) {
+                    String answer = agentService.run(buildBuddyPrompt(call), text, 3);
+                    if (answer == null || answer.isBlank()) {
                         return;
                     }
+                    appendHistory(call, text, answer);
                     String tts = baiduVoiceService.tts(answer);
                     send(session, Map.of("type", "tts", "data", tts, "text", answer));
                 } catch (Exception e) {
