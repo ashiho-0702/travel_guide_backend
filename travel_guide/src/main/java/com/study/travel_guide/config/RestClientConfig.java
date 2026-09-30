@@ -1,5 +1,6 @@
 package com.study.travel_guide.config;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -24,5 +25,11 @@ public class RestClientConfig {
     @Bean(destroyMethod = "shutdown")
     public ExecutorService taskExecutor() {
         return Executors.newFixedThreadPool(8);
+    }
+
+    @Bean(destroyMethod = "shutdown")
+    @Qualifier("guideCallExecutor")
+    public ExecutorService guideCallExecutor() {
+        return Executors.newCachedThreadPool();
     }
 }

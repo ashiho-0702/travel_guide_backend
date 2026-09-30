@@ -29,6 +29,9 @@ public class BaiduVoiceService {
     @Value("${baidu.secret-key:}")
     private String secretKey;
 
+    @Value("${baidu.app-id:}")
+    private String appId;
+
     private volatile String accessToken;
     private volatile long tokenExpireAt = 0;
 
@@ -126,7 +129,15 @@ public class BaiduVoiceService {
         return Base64.getEncoder().encodeToString(audio);
     }
 
-    private String getAccessToken() {
+    public String getApiKey() {
+        return apiKey;
+    }
+
+    public String getAppId() {
+        return appId;
+    }
+
+    public String getAccessToken() {
         if (accessToken != null && System.currentTimeMillis() < tokenExpireAt) {
             return accessToken;
         }
