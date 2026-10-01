@@ -4,6 +4,7 @@ import com.study.travel_guide.service.voice.BaiduStreamAsrClient;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -19,6 +20,7 @@ public class GuideCallSession {
     public volatile Double currentLat;
     public volatile Double currentLng;
     public volatile BaiduStreamAsrClient asrClient;
+    public volatile ScheduledExecutorService reminderTimer;
     public final StringBuilder history = new StringBuilder();
     public final ExecutorService singleThread = Executors.newSingleThreadExecutor();
     public final AtomicLong lastFrameAt = new AtomicLong(0);
@@ -39,5 +41,8 @@ public class GuideCallSession {
             }
         }
         singleThread.shutdownNow();
+        if (reminderTimer != null) {
+            reminderTimer.shutdownNow();
+        }
     }
 }

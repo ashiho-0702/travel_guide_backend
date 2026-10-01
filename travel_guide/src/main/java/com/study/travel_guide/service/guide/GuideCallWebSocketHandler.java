@@ -20,6 +20,8 @@ import java.util.Base64;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 视频通话式 AI 搭子 WebSocket 端点：接收音频流（转发百度流式 ASR）+ 视频帧（qwen-vl 识图），
@@ -35,6 +37,7 @@ public class GuideCallWebSocketHandler implements WebSocketHandler {
     private final BuddyMemoryService buddyMemoryService;
     private final JsonMapper jsonMapper;
     private final StringRedisTemplate redisTemplate;
+    private final BuddyReminderService buddyReminderService;
     private final ExecutorService guideCallExecutor;
 
     private final Map<String, GuideCallSession> sessions = new ConcurrentHashMap<>();
@@ -45,6 +48,7 @@ public class GuideCallWebSocketHandler implements WebSocketHandler {
                                      BuddyMemoryService buddyMemoryService,
                                      JsonMapper jsonMapper,
                                      StringRedisTemplate redisTemplate,
+                                     BuddyReminderService buddyReminderService,
                                      @Qualifier("guideCallExecutor") ExecutorService guideCallExecutor) {
         this.baiduVoiceService = baiduVoiceService;
         this.qwenVlService = qwenVlService;
@@ -52,6 +56,7 @@ public class GuideCallWebSocketHandler implements WebSocketHandler {
         this.buddyMemoryService = buddyMemoryService;
         this.jsonMapper = jsonMapper;
         this.redisTemplate = redisTemplate;
+        this.buddyReminderService = buddyReminderService;
         this.guideCallExecutor = guideCallExecutor;
     }
 
@@ -106,6 +111,7 @@ public class GuideCallWebSocketHandler implements WebSocketHandler {
                             call.history.append(hist);
                             log.info("[guide-call] 加载历史对话: {} 字符", hist.length());
                         }
+                        startReminders(session, call, tripId);
                     }
                     if (msg.has("lat") && msg.has("lng")) {
                         call.currentLat = msg.path("lat").asDouble();
@@ -195,6 +201,42 @@ public class GuideCallWebSocketHandler implements WebSocketHandler {
                 call.history.setLength(0);
                 call.history.append(s.substring(s.length() - 2000));
             }
+        }
+    }
+
+    private void startReminders(WebSocketSession session, GuideCallSession call, long tripId) {
+        call.singleThread.execute(() -> {
+            try {
+                String reminder = buddyReminderService.checkBookingReminder(call.userId, tripId);
+                if (reminder != null && !reminder.isBlank()) {
+                    sendReminderTts(session, call, reminder);
+                }
+            } catch (Exception e) {
+                log.warn("[remind] 预约提醒失败: {}", e.getMessage());
+            }
+        });
+        call.reminderTimer = Executors.newSingleThreadScheduledExecutor();
+        call.reminderTimer.scheduleAtFixedRate(() -> {
+            if (call.closed) {
+                return;
+            }
+            try {
+                String reminder = buddyReminderService.checkWeatherReminder(call.userId, tripId);
+                if (reminder != null && !reminder.isBlank()) {
+                    sendReminderTts(session, call, reminder);
+                }
+            } catch (Exception e) {
+                log.warn("[remind] 天气提醒失败: {}", e.getMessage());
+            }
+        }, 5, 5, TimeUnit.MINUTES);
+    }
+
+    private void sendReminderTts(WebSocketSession session, GuideCallSession call, String reminder) {
+        try {
+            String tts = baiduVoiceService.tts(reminder);
+            send(session, Map.of("type", "tts", "data", tts, "text", reminder));
+        } catch (Exception e) {
+            log.warn("[remind] 提醒 TTS 失败: {}", e.getMessage());
         }
     }
 
