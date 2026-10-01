@@ -43,6 +43,9 @@ public class NearbyTool implements Tool {
     public String execute(Map<String, Object> args) {
         double lat = toDouble(args.get("lat"));
         double lng = toDouble(args.get("lng"));
+        if (lat == 0 && lng == 0) {
+            return "用户当前位置未知，无法推荐附近";
+        }
         String category = (String) args.get("category");
         String result = tencentMapService.searchNearby(lat, lng, category);
         return result == null ? "附近未找到相关地点" : result;

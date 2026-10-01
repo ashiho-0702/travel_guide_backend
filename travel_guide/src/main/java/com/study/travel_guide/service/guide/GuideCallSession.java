@@ -22,6 +22,7 @@ public class GuideCallSession {
     public final StringBuilder history = new StringBuilder();
     public final ExecutorService singleThread = Executors.newSingleThreadExecutor();
     public final AtomicLong lastFrameAt = new AtomicLong(0);
+    public volatile boolean audioStarted = false;
     public volatile boolean closed = false;
 
     public GuideCallSession(Long userId, String sessionId) {

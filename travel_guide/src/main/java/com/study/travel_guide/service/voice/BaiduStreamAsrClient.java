@@ -2,22 +2,25 @@ package com.study.travel_guide.service.voice;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.WebSocket;
+import okhttp3.WebSocketListener;
 import lombok.extern.slf4j.Slf4j;
+import okio.ByteString;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.WebSocket;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.concurrent.CompletionStage;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
 
 /**
- * 百度实时语音识别（WebSocket 流式 ASR）客户端。
- * 协议：连 wss://ws-api.baidu.com/v2/recognize?token=...，
- * 首帧发 START（Text JSON）→ 持续发 PCM 音频（Binary）→ 最后发 FINISH（Text JSON），
+ * 百度实时语音识别（WebSocket 流式 ASR）客户端（OkHttp 实现，避开 JDK HttpClient 握手兼容问题）。
+ * 协议：连 wss://vop.baidu.com/realtime_asr?sn=...（sn 自定义 UUID），
+ * 首帧发 START（Text JSON，带 appid/appkey）→ 持续发 PCM 音频（Binary）→ 最后发 FINISH（Text JSON），
  * 服务端实时返回识别结果（Text/Binary，可能 gzip）。
  */
 @Slf4j
@@ -33,16 +36,14 @@ public class BaiduStreamAsrClient {
 
     private final Listener listener;
     private final JsonMapper jsonMapper;
-    private final String token;
     private final String appkey;
     private final String appid;
 
     private WebSocket webSocket;
     private volatile boolean closed = false;
 
-    public BaiduStreamAsrClient(String token, String appkey, String appid,
+    public BaiduStreamAsrClient(String appkey, String appid,
                                 JsonMapper jsonMapper, Listener listener) {
-        this.token = token;
         this.appkey = appkey;
         this.appid = appid;
         this.jsonMapper = jsonMapper;
@@ -51,11 +52,12 @@ public class BaiduStreamAsrClient {
 
     public void start() {
         try {
-            String url = "wss://ws-api.baidu.com/v2/recognize?dev_pid=1537&format=pcm&rate=16000&token=" + token;
-            HttpClient client = HttpClient.newHttpClient();
-            this.webSocket = client.newWebSocketBuilder()
-                    .buildAsync(URI.create(url), new WsListener())
-                    .join();
+            String url = "wss://vop.baidu.com/realtime_asr?sn=" + UUID.randomUUID();
+            OkHttpClient client = new OkHttpClient.Builder()
+                    .readTimeout(0, TimeUnit.MILLISECONDS)
+                    .build();
+            Request request = new Request.Builder().url(url).build();
+            this.webSocket = client.newWebSocket(request, new WsListener());
         } catch (Exception e) {
             log.error("[asr] 连接百度流式 ASR 失败: {}", e.getMessage());
             listener.onError(e.getMessage());
@@ -65,7 +67,7 @@ public class BaiduStreamAsrClient {
     public void sendAudio(byte[] pcm) {
         if (webSocket != null && !closed && pcm != null && pcm.length > 0) {
             try {
-                webSocket.sendBinary(ByteBuffer.wrap(pcm), true);
+                webSocket.send(ByteString.of(pcm));
             } catch (Exception e) {
                 log.warn("[asr] 发送音频帧失败: {}", e.getMessage());
             }
@@ -75,7 +77,7 @@ public class BaiduStreamAsrClient {
     public void finish() {
         if (webSocket != null && !closed) {
             try {
-                webSocket.sendText("{\"type\":\"FINISH\"}", true);
+                webSocket.send("{\"type\":\"FINISH\"}");
             } catch (Exception e) {
                 log.warn("[asr] 发送 FINISH 失败: {}", e.getMessage());
             }
@@ -86,7 +88,7 @@ public class BaiduStreamAsrClient {
         closed = true;
         if (webSocket != null) {
             try {
-                webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "bye");
+                webSocket.close(1000, "bye");
             } catch (Exception ignored) {
             }
         }
@@ -95,31 +97,38 @@ public class BaiduStreamAsrClient {
     private String buildStartFrame() {
         return "{\"type\":\"START\",\"data\":{\"appid\":" + (appid == null || appid.isBlank() ? "0" : appid)
                 + ",\"appkey\":\"" + (appkey == null ? "" : appkey)
-                + "\",\"dev_pid\":1537,\"cuid\":\"travel_guide\",\"format\":\"pcm\",\"sample\":16000}}";
+                + "\",\"dev_pid\":15372,\"cuid\":\"travel_guide\",\"format\":\"pcm\",\"sample\":16000}}";
     }
 
     private void handleResult(String json) {
         try {
             JsonNode root = jsonMapper.readTree(json);
             String type = root.path("type").asText();
-            String text = root.path("result").asText();
+            String text = extractText(root.path("result"));
             if (text == null || text.isBlank()) {
-                JsonNode r = root.path("result");
-                if (r.isObject()) {
-                    text = r.path("result").asText();
-                }
-            }
-            if (text == null || text.isBlank()) {
+                log.info("[asr] 识别结果无文本（type={}）: {}", type, json);
                 return;
             }
             if (type.contains("FIN") || type.contains("fin") || type.contains("Final")) {
+                log.info("[asr] 识别最终结果 FINAL: {}", text);
                 listener.onFinal(text);
             } else {
+                log.info("[asr] 识别中间结果 partial: {}", text);
                 listener.onPartial(text);
             }
         } catch (Exception e) {
             log.warn("[asr] 解析识别结果失败: {}", e.getMessage());
         }
+    }
+
+    private String extractText(JsonNode result) {
+        if (result == null || result.isMissingNode()) {
+            return null;
+        }
+        if (result.isArray()) {
+            return result.size() > 0 ? result.get(0).asText() : null;
+        }
+        return result.asText();
     }
 
     private String decompress(byte[] data) {
@@ -136,39 +145,35 @@ public class BaiduStreamAsrClient {
         }
     }
 
-    private class WsListener implements WebSocket.Listener {
+    private class WsListener extends WebSocketListener {
         @Override
-        public void onOpen(WebSocket ws) {
-            ws.request(1);
-            ws.sendText(buildStartFrame(), true);
+        public void onOpen(WebSocket ws, Response response) {
+            log.info("[asr] 百度 WebSocket 已连接，发送 START 帧");
+            ws.send(buildStartFrame());
         }
 
         @Override
-        public CompletionStage<?> onText(WebSocket ws, CharSequence data, boolean last) {
-            ws.request(1);
-            handleResult(data.toString());
-            return null;
+        public void onMessage(WebSocket ws, String text) {
+            log.info("[asr] 收到百度文本帧: {}", text);
+            handleResult(text);
         }
 
         @Override
-        public CompletionStage<?> onBinary(WebSocket ws, ByteBuffer data, boolean last) {
-            ws.request(1);
-            byte[] bytes = new byte[data.remaining()];
-            data.get(bytes);
-            handleResult(decompress(bytes));
-            return null;
+        public void onMessage(WebSocket ws, ByteString bytes) {
+            String json = decompress(bytes.toByteArray());
+            log.info("[asr] 收到百度二进制帧(解压后): {}", json);
+            handleResult(json);
         }
 
         @Override
-        public void onError(WebSocket ws, Throwable error) {
-            log.warn("[asr] 百度流式 ASR 连接错误: {}", error.getMessage());
-            listener.onError(error.getMessage());
+        public void onFailure(WebSocket ws, Throwable t, Response response) {
+            log.warn("[asr] 百度流式 ASR 连接错误: {}", t == null ? "unknown" : t.getMessage());
+            listener.onError(t == null ? "unknown" : t.getMessage());
         }
 
         @Override
-        public CompletionStage<?> onClose(WebSocket ws, int statusCode, String reason) {
-            log.info("[asr] 百度流式 ASR 连接关闭: {} {}", statusCode, reason);
-            return null;
+        public void onClosed(WebSocket ws, int code, String reason) {
+            log.info("[asr] 百度流式 ASR 连接关闭: {} {}", code, reason);
         }
     }
 }

@@ -8,12 +8,14 @@ import com.study.travel_guide.service.voice.BaiduStreamAsrClient;
 import com.study.travel_guide.service.voice.BaiduVoiceService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.WebSocketMessage;
 import org.springframework.web.socket.WebSocketSession;
 
+import java.time.Duration;
 import java.util.Base64;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,6 +34,7 @@ public class GuideCallWebSocketHandler implements WebSocketHandler {
     private final AgentService agentService;
     private final BuddyMemoryService buddyMemoryService;
     private final JsonMapper jsonMapper;
+    private final StringRedisTemplate redisTemplate;
     private final ExecutorService guideCallExecutor;
 
     private final Map<String, GuideCallSession> sessions = new ConcurrentHashMap<>();
@@ -41,12 +44,14 @@ public class GuideCallWebSocketHandler implements WebSocketHandler {
                                      AgentService agentService,
                                      BuddyMemoryService buddyMemoryService,
                                      JsonMapper jsonMapper,
+                                     StringRedisTemplate redisTemplate,
                                      @Qualifier("guideCallExecutor") ExecutorService guideCallExecutor) {
         this.baiduVoiceService = baiduVoiceService;
         this.qwenVlService = qwenVlService;
         this.agentService = agentService;
         this.buddyMemoryService = buddyMemoryService;
         this.jsonMapper = jsonMapper;
+        this.redisTemplate = redisTemplate;
         this.guideCallExecutor = guideCallExecutor;
     }
 
@@ -55,7 +60,6 @@ public class GuideCallWebSocketHandler implements WebSocketHandler {
         Long userId = (Long) session.getAttributes().get("userId");
         GuideCallSession call = new GuideCallSession(userId, null);
         BaiduStreamAsrClient asr = new BaiduStreamAsrClient(
-                baiduVoiceService.getAccessToken(),
                 baiduVoiceService.getApiKey(),
                 baiduVoiceService.getAppId(),
                 jsonMapper,
@@ -97,6 +101,11 @@ public class GuideCallWebSocketHandler implements WebSocketHandler {
                         } catch (Exception e) {
                             log.warn("[guide-call] 生成搭子记忆失败: {}", e.getMessage());
                         }
+                        String hist = readHistory(call.userId, tripId);
+                        if (hist != null && !hist.isBlank()) {
+                            call.history.append(hist);
+                            log.info("[guide-call] 加载历史对话: {} 字符", hist.length());
+                        }
                     }
                     if (msg.has("lat") && msg.has("lng")) {
                         call.currentLat = msg.path("lat").asDouble();
@@ -108,10 +117,18 @@ public class GuideCallWebSocketHandler implements WebSocketHandler {
                     String data = msg.path("data").asText();
                     if (data != null && !data.isBlank()) {
                         byte[] pcm = Base64.getDecoder().decode(data);
+                        if (!call.audioStarted) {
+                            call.audioStarted = true;
+                            log.info("[guide-call] 首次收到音频帧，大小={} 字节", pcm.length);
+                        }
                         call.asrClient.sendAudio(pcm);
                     }
                 }
                 case "frame" -> handleFrame(session, call, msg.path("data").asText());
+                case "location" -> {
+                    call.currentLat = msg.path("lat").asDouble();
+                    call.currentLng = msg.path("lng").asDouble();
+                }
                 case "stop" -> closeSession(session);
                 default -> log.debug("[guide-call] 未知消息类型: {}", type);
             }
@@ -149,7 +166,9 @@ public class GuideCallWebSocketHandler implements WebSocketHandler {
         StringBuilder sb = new StringBuilder();
         sb.append("你是一个旅行问答助手。你能解答行程问题（今天去哪、景点介绍、门票、时长）、")
                 .append("记账问题（花了多少、分类），也能闲聊。")
-                .append("需要实时信息时调用工具：推荐附近好玩的（search_nearby）、查天气（get_weather）。")
+                .append("需要实时信息时调用工具：推荐附近好玩的（search_nearby）、查天气（get_weather）、讲解景点（narrate）。")
+                .append("用户想听讲解时，先用 search_nearby（用户当前定位）识别景点，再调 narrate 生成讲解词。")
+                .append("如果不知道用户当前位置，不要调 search_nearby，直接告诉用户你无法定位。")
                 .append("你只读，不修改行程或记账。回答口语化、简洁（100-200 字，适合语音播报）。\n\n");
         if (call.currentAttraction != null && !call.currentAttraction.isBlank()) {
             sb.append("用户当前识别的景点：").append(call.currentAttraction).append("\n");
@@ -182,8 +201,30 @@ public class GuideCallWebSocketHandler implements WebSocketHandler {
     private void closeSession(WebSocketSession session) {
         GuideCallSession call = sessions.remove(session.getId());
         if (call != null) {
+            saveHistory(call);
             call.close();
             log.info("[guide-call] 通话结束: wsId={}", session.getId());
+        }
+    }
+
+    private String readHistory(Long userId, Long tripId) {
+        try {
+            return redisTemplate.opsForValue().get("guide:call:" + userId + ":" + tripId);
+        } catch (Exception e) {
+            log.warn("[guide-call] 读取历史失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private void saveHistory(GuideCallSession call) {
+        if (call.tripId == null || call.history.length() == 0) {
+            return;
+        }
+        try {
+            redisTemplate.opsForValue().set("guide:call:" + call.userId + ":" + call.tripId,
+                    call.history.toString(), Duration.ofDays(7));
+        } catch (Exception e) {
+            log.warn("[guide-call] 保存历史失败: {}", e.getMessage());
         }
     }
 
@@ -227,6 +268,7 @@ public class GuideCallWebSocketHandler implements WebSocketHandler {
 
         @Override
         public void onPartial(String text) {
+            log.info("[guide-call] 收到 partial 识别: {}", text);
             send(session, Map.of("type", "asr_partial", "text", text));
         }
 
@@ -235,13 +277,17 @@ public class GuideCallWebSocketHandler implements WebSocketHandler {
             if (call.closed) {
                 return;
             }
+            log.info("[guide-call] 识别到整句 FINAL: {}", text);
             send(session, Map.of("type", "asr_final", "text", text));
             call.singleThread.execute(() -> {
                 try {
+                    log.info("[guide-call] 开始生成回答: {}", text);
                     String answer = agentService.run(buildBuddyPrompt(call), text, 3);
                     if (answer == null || answer.isBlank()) {
+                        log.warn("[guide-call] 生成回答为空");
                         return;
                     }
+                    log.info("[guide-call] 生成回答: {}", answer);
                     appendHistory(call, text, answer);
                     String tts = baiduVoiceService.tts(answer);
                     send(session, Map.of("type", "tts", "data", tts, "text", answer));
@@ -254,6 +300,7 @@ public class GuideCallWebSocketHandler implements WebSocketHandler {
 
         @Override
         public void onError(String message) {
+            log.warn("[guide-call] ASR 错误: {}", message);
             send(session, Map.of("type", "error", "message", message));
         }
     }
