@@ -150,6 +150,7 @@ public class TripPdfService {
         appendPart(parts, "捷径", p.path("shortcut"));
         appendPart(parts, "人少", p.path("crowd"));
         appendPart(parts, "必带", p.path("bring"));
+        appendPart(parts, "防宰客", p.path("scam"));
         return parts.isEmpty() ? "-" : String.join("；", parts);
     }
 
