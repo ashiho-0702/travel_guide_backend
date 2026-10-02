@@ -117,7 +117,7 @@ public class GuideCallWebSocketHandler implements WebSocketHandler {
                         call.currentLat = msg.path("lat").asDouble();
                         call.currentLng = msg.path("lng").asDouble();
                     }
-                    send(session, Map.of("type", "ready", "sessionId", call.sessionId));
+                    send(session, Map.of("type", "ready", "sessionId", call.sessionId == null ? "" : call.sessionId));
                 }
                 case "audio" -> {
                     String data = msg.path("data").asText();
@@ -127,6 +127,7 @@ public class GuideCallWebSocketHandler implements WebSocketHandler {
                             call.audioStarted = true;
                             log.info("[guide-call] 首次收到音频帧，大小={} 字节", pcm.length);
                         }
+                        ensureAsr(session, call);
                         call.asrClient.sendAudio(pcm);
                     }
                 }
@@ -149,7 +150,7 @@ public class GuideCallWebSocketHandler implements WebSocketHandler {
         }
         long now = System.currentTimeMillis();
         long last = call.lastFrameAt.get();
-        if (now - last < 1000) {
+        if (now - last < 10000) {
             return;
         }
         if (!call.lastFrameAt.compareAndSet(last, now)) {
@@ -240,6 +241,19 @@ public class GuideCallWebSocketHandler implements WebSocketHandler {
         }
     }
 
+    private void ensureAsr(WebSocketSession session, GuideCallSession call) {
+        if (call.asrClient == null || call.asrClient.isClosed()) {
+            BaiduStreamAsrClient asr = new BaiduStreamAsrClient(
+                    baiduVoiceService.getApiKey(),
+                    baiduVoiceService.getAppId(),
+                    jsonMapper,
+                    new AsrListener(session, call));
+            call.asrClient = asr;
+            asr.start();
+            log.info("[guide-call] 重新建立 ASR 会话");
+        }
+    }
+
     private void closeSession(WebSocketSession session) {
         GuideCallSession call = sessions.remove(session.getId());
         if (call != null) {
@@ -310,7 +324,6 @@ public class GuideCallWebSocketHandler implements WebSocketHandler {
 
         @Override
         public void onPartial(String text) {
-            log.info("[guide-call] 收到 partial 识别: {}", text);
             send(session, Map.of("type", "asr_partial", "text", text));
         }
 
@@ -333,6 +346,11 @@ public class GuideCallWebSocketHandler implements WebSocketHandler {
                     appendHistory(call, text, answer);
                     String tts = baiduVoiceService.tts(answer);
                     send(session, Map.of("type", "tts", "data", tts, "text", answer));
+                    // 一句结束，关闭 ASR 会话，下一句重新建立，避免静音超时
+                    if (call.asrClient != null) {
+                        call.asrClient.finish();
+                        call.asrClient.close();
+                    }
                 } catch (Exception e) {
                     log.warn("[guide-call] 生成回答失败: {}", e.getMessage());
                     send(session, Map.of("type", "error", "message", e.getMessage()));

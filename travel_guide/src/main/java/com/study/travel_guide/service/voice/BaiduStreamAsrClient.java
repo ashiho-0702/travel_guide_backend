@@ -13,6 +13,8 @@ import okio.ByteString;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
@@ -41,6 +43,8 @@ public class BaiduStreamAsrClient {
 
     private WebSocket webSocket;
     private volatile boolean closed = false;
+    private volatile boolean opened = false;
+    private final List<byte[]> pendingAudio = new ArrayList<>();
 
     public BaiduStreamAsrClient(String appkey, String appid,
                                 JsonMapper jsonMapper, Listener listener) {
@@ -65,7 +69,21 @@ public class BaiduStreamAsrClient {
     }
 
     public void sendAudio(byte[] pcm) {
-        if (webSocket != null && !closed && pcm != null && pcm.length > 0) {
+        if (closed || pcm == null || pcm.length == 0) {
+            return;
+        }
+        synchronized (pendingAudio) {
+            if (!opened) {
+                // START 帧还没发出去，先缓存，避免音频帧排在 START 前面
+                pendingAudio.add(pcm);
+                return;
+            }
+        }
+        sendBinary(pcm);
+    }
+
+    private void sendBinary(byte[] pcm) {
+        if (webSocket != null) {
             try {
                 webSocket.send(ByteString.of(pcm));
             } catch (Exception e) {
@@ -94,6 +112,10 @@ public class BaiduStreamAsrClient {
         }
     }
 
+    public boolean isClosed() {
+        return closed;
+    }
+
     private String buildStartFrame() {
         return "{\"type\":\"START\",\"data\":{\"appid\":" + (appid == null || appid.isBlank() ? "0" : appid)
                 + ",\"appkey\":\"" + (appkey == null ? "" : appkey)
@@ -103,17 +125,23 @@ public class BaiduStreamAsrClient {
     private void handleResult(String json) {
         try {
             JsonNode root = jsonMapper.readTree(json);
+            int errNo = root.path("err_no").asInt(0);
+            if (errNo != 0) {
+                log.warn("[asr] 百度返回错误码 {}: {}", errNo, root.path("err_msg").asText());
+                close();
+                return;
+            }
             String type = root.path("type").asText();
             String text = extractText(root.path("result"));
             if (text == null || text.isBlank()) {
-                log.info("[asr] 识别结果无文本（type={}）: {}", type, json);
+                log.debug("[asr] 识别结果无文本（type={}）: {}", type, json);
                 return;
             }
             if (type.contains("FIN") || type.contains("fin") || type.contains("Final")) {
                 log.info("[asr] 识别最终结果 FINAL: {}", text);
                 listener.onFinal(text);
             } else {
-                log.info("[asr] 识别中间结果 partial: {}", text);
+                log.debug("[asr] 识别中间结果 partial: {}", text);
                 listener.onPartial(text);
             }
         } catch (Exception e) {
@@ -149,30 +177,37 @@ public class BaiduStreamAsrClient {
         @Override
         public void onOpen(WebSocket ws, Response response) {
             log.info("[asr] 百度 WebSocket 已连接，发送 START 帧");
-            ws.send(buildStartFrame());
+            synchronized (pendingAudio) {
+                ws.send(buildStartFrame());
+                opened = true;
+                for (byte[] pcm : pendingAudio) {
+                    sendBinary(pcm);
+                }
+                pendingAudio.clear();
+            }
         }
 
         @Override
         public void onMessage(WebSocket ws, String text) {
-            log.info("[asr] 收到百度文本帧: {}", text);
             handleResult(text);
         }
 
         @Override
         public void onMessage(WebSocket ws, ByteString bytes) {
             String json = decompress(bytes.toByteArray());
-            log.info("[asr] 收到百度二进制帧(解压后): {}", json);
             handleResult(json);
         }
 
         @Override
         public void onFailure(WebSocket ws, Throwable t, Response response) {
+            closed = true;
             log.warn("[asr] 百度流式 ASR 连接错误: {}", t == null ? "unknown" : t.getMessage());
             listener.onError(t == null ? "unknown" : t.getMessage());
         }
 
         @Override
         public void onClosed(WebSocket ws, int code, String reason) {
+            closed = true;
             log.info("[asr] 百度流式 ASR 连接关闭: {} {}", code, reason);
         }
     }

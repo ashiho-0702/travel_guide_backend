@@ -23,8 +23,12 @@ public class JwtInterceptor implements HandlerInterceptor {
         if (auth == null || !auth.startsWith("Bearer ")) {
             throw new BizException(401, "未登录");
         }
-        Long userId = jwtUtil.parseUserId(auth.substring(7));
-        request.setAttribute("userId", userId);
-        return true;
+        try {
+            Long userId = jwtUtil.parseUserId(auth.substring(7));
+            request.setAttribute("userId", userId);
+            return true;
+        } catch (Exception e) {
+            throw new BizException(401, "登录已过期，请重新登录");
+        }
     }
 }
