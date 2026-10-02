@@ -95,7 +95,9 @@ public class BaiduVoiceService {
                 + "&tok=" + encode(token)
                 + "&cuid=travel_guide"
                 + "&ctp=1"
-                + "&lan=zh";
+                + "&lan=zh"
+                + "&spd=6"
+                + "&vol=6";
         log.info("TTS 合成文本：{}", text);
 
         byte[] audio;
