@@ -154,6 +154,45 @@ public class TencentMapService {
     }
 
     /**
+     * 按关键词搜索最近的一个 POI（如公厕/停车场/充电桩/民宿），返回 {name, distance, address, lat, lng}，失败返回 null。
+     */
+    public Map<String, Object> searchNearestPoi(double lat, double lng, String keyword) {
+        String url = "https://apis.map.qq.com/ws/place/v1/search" +
+                "?keyword={kw}&boundary=nearby({lat},{lng},1000)&key={key}";
+        try {
+            String json = restClient.get()
+                    .uri(url, keyword, lat, lng, mapKey)
+                    .retrieve()
+                    .body(String.class);
+            JsonNode root = jsonMapper.readTree(json);
+            int status = root.path("status").asInt(-1);
+            if (status != 0) {
+                log.warn("[map] 周边设施搜索失败：keyword={}, status={}, message={}", keyword, status, root.path("message").asText());
+                return null;
+            }
+            JsonNode first = root.path("data").get(0);
+            if (first == null || first.isMissingNode()) {
+                return null;
+            }
+            String title = first.path("title").asText();
+            if (title == null || title.isBlank()) {
+                return null;
+            }
+            Map<String, Object> result = new HashMap<>();
+            result.put("name", title);
+            result.put("distance", first.path("_distance").asInt());
+            result.put("address", first.path("address").asText());
+            JsonNode loc = first.path("location");
+            result.put("lat", loc.path("lat").asDouble());
+            result.put("lng", loc.path("lng").asDouble());
+            return result;
+        } catch (Exception e) {
+            log.warn("[map] 周边设施搜索失败：keyword={}, {}", keyword, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
      * 步行路线信息（距离米 + 时长秒），失败返回 null。结果按坐标缓存 30 天。
      */
     public Map<String, Integer> routeInfo(double fromLat, double fromLng, double toLat, double toLng) {
@@ -223,8 +262,8 @@ public class TencentMapService {
             JsonNode root = jsonMapper.readTree(json);
             int status = root.path("status").asInt(-1);
             if (status != 0) {
-                log.warn("[map] 地理编码无结果或异常（不缓存，下次重试）: city={}, status={}, message={}", city, status, root.path("message").asText());
-                return false;
+                log.warn("[map] 地理编码无结果或异常（降级放行，下次重试）: city={}, status={}, message={}", city, status, root.path("message").asText());
+                return null;
             }
             String nation = root.path("result").path("ad_info").path("nation").asText();
             boolean inChina = "中国".equals(nation) || "中华人民共和国".equals(nation);
