@@ -275,12 +275,19 @@ public class GuideCallWebSocketHandler implements WebSocketHandler {
     }
 
     private void saveHistory(GuideCallSession call) {
-        if (call.tripId == null || call.history.length() == 0) {
+        if (call.tripId == null) {
             return;
+        }
+        String history;
+        synchronized (call.history) {
+            if (call.history.length() == 0) {
+                return;
+            }
+            history = call.history.toString();
         }
         try {
             redisTemplate.opsForValue().set("guide:call:" + call.userId + ":" + call.tripId,
-                    call.history.toString(), Duration.ofDays(7));
+                    history, Duration.ofDays(7));
         } catch (Exception e) {
             log.warn("[guide-call] 保存历史失败: {}", e.getMessage());
         }
@@ -349,9 +356,10 @@ public class GuideCallWebSocketHandler implements WebSocketHandler {
                     String tts = baiduVoiceService.tts(answer);
                     send(session, Map.of("type", "tts", "data", tts, "text", answer));
                     // 一句结束，关闭 ASR 会话，下一句重新建立，避免静音超时
-                    if (call.asrClient != null) {
-                        call.asrClient.finish();
-                        call.asrClient.close();
+                    BaiduStreamAsrClient asr = call.asrClient;
+                    if (asr != null) {
+                        asr.finish();
+                        asr.close();
                     }
                 } catch (Exception e) {
                     log.warn("[guide-call] 生成回答失败: {}", e.getMessage());

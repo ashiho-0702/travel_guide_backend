@@ -176,6 +176,10 @@ public class BaiduStreamAsrClient {
     private class WsListener extends WebSocketListener {
         @Override
         public void onOpen(WebSocket ws, Response response) {
+            if (closed) {
+                log.info("[asr] 连接在打开前已关闭，忽略 onOpen");
+                return;
+            }
             log.info("[asr] 百度 WebSocket 已连接，发送 START 帧");
             synchronized (pendingAudio) {
                 ws.send(buildStartFrame());
